@@ -2,7 +2,7 @@ import { useMemo, type Ref } from 'react';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { yaml } from '@codemirror/lang-yaml';
 import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { keymap } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 
 type ConfigSourceEditorProps = {
   value: string;
@@ -22,7 +22,15 @@ export default function ConfigSourceEditor({
   placeholder,
 }: ConfigSourceEditorProps) {
   const extensions = useMemo(
-    () => [yaml(), search(), highlightSelectionMatches(), keymap.of(searchKeymap)],
+    () => [
+      yaml(),
+      search(),
+      highlightSelectionMatches(),
+      keymap.of(searchKeymap),
+      EditorView.editorAttributes.of((view) => ({
+        class: view.state.selection.ranges.some((range) => !range.empty) ? 'cm-has-selection' : '',
+      })),
+    ],
     []
   );
 
