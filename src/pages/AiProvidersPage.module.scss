@@ -18,6 +18,14 @@ $openai-toolbar-control-height: 36px;
   height: 24px;
 }
 
+.providerHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .pageTitle {
   font-size: 28px;
   font-weight: 700;
@@ -100,6 +108,19 @@ $openai-toolbar-control-height: 36px;
 .openaiProviderTitle {
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.providerCardTopBar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  min-width: 0;
+
+  :global(.item-title) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
 }
 
 // 排序控件
@@ -1396,6 +1417,30 @@ $openai-toolbar-control-height: 36px;
   flex-shrink: 0;
 }
 
+.testResultStatusButton {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    filter: brightness(0.98);
+    outline: 1px solid var(--border-color);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:global(.muted) {
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+    background: var(--bg-secondary);
+  }
+}
+
 .statusIconWrapper {
   display: inline-flex;
   align-items: center;
@@ -1421,6 +1466,14 @@ $openai-toolbar-control-height: 36px;
 
 // 暗色主题适配
 :global([data-theme='dark']) {
+  .testResultStatusButton {
+    &:global(.muted) {
+      color: var(--text-secondary);
+      border-color: var(--border-primary);
+      background: var(--bg-tertiary);
+    }
+  }
+
   .headerBadge {
     background: rgba($primary-color, 0.14);
     border-color: rgba($primary-color, 0.35);

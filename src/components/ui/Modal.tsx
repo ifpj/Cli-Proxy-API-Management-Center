@@ -4,6 +4,7 @@ import {
   useId,
   useRef,
   useState,
+  type MouseEvent,
   type PropsWithChildren,
   type ReactNode,
 } from 'react';
@@ -187,6 +188,14 @@ export function Modal({
     startClose(true);
   }, [startClose]);
 
+  const handleOverlayMouseDown = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (closeDisabled || event.target !== event.currentTarget) return;
+      handleClose();
+    },
+    [closeDisabled, handleClose]
+  );
+
   useEffect(() => {
     return () => {
       if (closeTimerRef.current !== null) {
@@ -273,7 +282,7 @@ export function Modal({
   const modalClass = `modal ${isClosing ? 'modal-closing' : 'modal-entering'}${className ? ` ${className}` : ''}`;
 
   const modalContent = (
-    <div className={overlayClass}>
+    <div className={overlayClass} onMouseDown={handleOverlayMouseDown}>
       <div
         ref={modalRef}
         className={modalClass}
