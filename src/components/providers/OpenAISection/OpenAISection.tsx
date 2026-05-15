@@ -50,10 +50,22 @@ interface OpenAISectionProps {
   disableControls: boolean;
   isSwitching: boolean;
   resolvedTheme: string;
+  isTestingProvider: boolean;
+  testResults: Record<
+    number,
+    {
+      status: 'idle' | 'loading' | 'success' | 'error';
+      message: string;
+      responseStatusCode?: number;
+      responseBodyText?: string;
+    }
+  >;
   onAdd: () => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
+  onTest: (index: number) => void;
+  onOpenTestResult: (index: number) => void;
 }
 
 interface IndexedOpenAIProvider {
@@ -76,16 +88,20 @@ export function OpenAISection({
   disableControls,
   isSwitching,
   resolvedTheme,
+  isTestingProvider,
+  testResults,
   onAdd,
   onEdit,
   onDelete,
   onToggle,
+  onTest,
+  onOpenTestResult,
 }: OpenAISectionProps) {
   const { t } = useTranslation();
   const pageTransitionLayer = usePageTransitionLayer();
   const isTransitionAnimating = pageTransitionLayer?.isAnimating ?? false;
-  const actionsDisabled = disableControls || loading || isSwitching;
-  const toggleDisabled = disableControls || loading || isSwitching;
+  const actionsDisabled = disableControls || loading || isSwitching || isTestingProvider;
+  const toggleDisabled = disableControls || loading || isSwitching || isTestingProvider;
   const [sortOption, setSortOption] = useState<SortOption>('config-order');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
@@ -534,6 +550,10 @@ export function OpenAISection({
     const statusData =
       statusBarCache.get(getOpenAIProviderKey(provider, originalIndex)) || EMPTY_STATUS_BAR;
     const providerDisabled = provider.disabled === true;
+    const testResult = testResults[originalIndex];
+    const hasTestDetails = Boolean(
+      testResult?.responseBodyText || testResult?.message || testResult?.responseStatusCode
+    );
 
     return (
       <div
@@ -542,7 +562,39 @@ export function OpenAISection({
         style={actionsDisabled ? { opacity: 0.6 } : undefined}
       >
         <div className={styles.openaiProviderMeta}>
-          <div className={styles.openaiProviderTitle}>{provider.name}</div>
+          <div className={styles.providerCardTopBar}>
+            <div className={styles.openaiProviderTitle}>{provider.name}</div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onTest(originalIndex)}
+              loading={testResult?.status === 'loading'}
+              disabled={actionsDisabled || !apiKeyEntries.some((entry) => entry.apiKey?.trim())}
+            >
+              {t('ai_providers.openai_test_single_action')}
+            </Button>
+          </div>
+          {testResult?.message && (
+            <button
+              type="button"
+              className={`status-badge ${
+                testResult.status === 'error'
+                  ? 'error'
+                  : testResult.status === 'success'
+                    ? 'success'
+                    : 'muted'
+              } ${styles.testResultStatusButton}`}
+              disabled={!hasTestDetails}
+              onClick={() => {
+                if (!hasTestDetails) return;
+                onOpenTestResult(originalIndex);
+              }}
+              title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+              aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+            >
+              {testResult.message}
+            </button>
+          )}
           {provider.priority !== undefined && (
             <div className={styles.fieldRow}>
               <span className={styles.fieldLabel}>{t('common.priority')}:</span>
