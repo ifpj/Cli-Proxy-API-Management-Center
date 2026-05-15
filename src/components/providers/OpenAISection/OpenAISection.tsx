@@ -58,6 +58,10 @@ interface OpenAISectionProps {
       message: string;
       responseStatusCode?: number;
       responseBodyText?: string;
+      successMessage?: string;
+      failureMessage?: string;
+      successResponseBodyText?: string;
+      failureResponseBodyText?: string;
     }
   >;
   onAdd: () => void;
@@ -65,7 +69,7 @@ interface OpenAISectionProps {
   onDelete: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
   onTest: (index: number) => void;
-  onOpenTestResult: (index: number) => void;
+  onOpenTestResult: (index: number, group?: 'success' | 'failure') => void;
 }
 
 interface IndexedOpenAIProvider {
@@ -551,7 +555,9 @@ export function OpenAISection({
       statusBarCache.get(getOpenAIProviderKey(provider, originalIndex)) || EMPTY_STATUS_BAR;
     const providerDisabled = provider.disabled === true;
     const testResult = testResults[originalIndex];
-    const hasTestDetails = Boolean(
+    const hasSuccessDetails = Boolean(testResult?.successResponseBodyText);
+    const hasFailureDetails = Boolean(testResult?.failureResponseBodyText);
+    const hasSummaryDetails = Boolean(
       testResult?.responseBodyText || testResult?.message || testResult?.responseStatusCode
     );
 
@@ -575,25 +581,59 @@ export function OpenAISection({
             </Button>
           </div>
           {testResult?.message && (
-            <button
-              type="button"
-              className={`status-badge ${
-                testResult.status === 'error'
-                  ? 'error'
-                  : testResult.status === 'success'
-                    ? 'success'
-                    : 'muted'
-              } ${styles.testResultStatusButton}`}
-              disabled={!hasTestDetails}
-              onClick={() => {
-                if (!hasTestDetails) return;
-                onOpenTestResult(originalIndex);
-              }}
-              title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
-              aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
-            >
-              {testResult.message}
-            </button>
+            <div className={styles.openaiTestResultGroup}>
+              {testResult.successMessage && (
+                <button
+                  type="button"
+                  className={`status-badge success ${styles.testResultStatusButton}`}
+                  disabled={!hasSuccessDetails}
+                  onClick={() => {
+                    if (!hasSuccessDetails) return;
+                    onOpenTestResult(originalIndex, 'success');
+                  }}
+                  title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                  aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                >
+                  {testResult.successMessage}
+                </button>
+              )}
+              {testResult.failureMessage && (
+                <button
+                  type="button"
+                  className={`status-badge error ${styles.testResultStatusButton}`}
+                  disabled={!hasFailureDetails}
+                  onClick={() => {
+                    if (!hasFailureDetails) return;
+                    onOpenTestResult(originalIndex, 'failure');
+                  }}
+                  title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                  aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                >
+                  {testResult.failureMessage}
+                </button>
+              )}
+              {!testResult.successMessage && !testResult.failureMessage && (
+                <button
+                  type="button"
+                  className={`status-badge ${
+                    testResult.status === 'error'
+                      ? 'error'
+                      : testResult.status === 'success'
+                        ? 'success'
+                        : 'muted'
+                  } ${styles.testResultStatusButton}`}
+                  disabled={!hasSummaryDetails}
+                  onClick={() => {
+                    if (!hasSummaryDetails) return;
+                    onOpenTestResult(originalIndex);
+                  }}
+                  title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                  aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                >
+                  {testResult.message}
+                </button>
+              )}
+            </div>
           )}
           {provider.priority !== undefined && (
             <div className={styles.fieldRow}>
