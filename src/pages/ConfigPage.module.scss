@@ -363,6 +363,13 @@
       background: var(--bg-hover);
     }
 
+    .cm-editor.cm-has-selection {
+      .cm-activeLine,
+      .cm-activeLineGutter {
+        background: transparent;
+      }
+    }
+
     .cm-selectionMatch {
       background: rgba(255, 193, 7, 0.3);
     }
