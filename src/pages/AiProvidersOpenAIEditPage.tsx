@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { HeaderInputList } from '@/components/ui/HeaderInputList';
 import { Input } from '@/components/ui/Input';
 import { ModelInputList } from '@/components/ui/ModelInputList';
+import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
@@ -20,11 +21,28 @@ import styles from './AiProvidersPage.module.scss';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 
 const OPENAI_TEST_TIMEOUT_MS = 30_000;
+const TEST_RESPONSE_PREVIEW_MAX_LENGTH = 8_000;
 
 const getErrorMessage = (err: unknown) => {
   if (err instanceof Error) return err.message;
   if (typeof err === 'string') return err;
   return '';
+};
+
+const formatTestResponseBody = (body: unknown, bodyText: string): string => {
+  if (body !== null && typeof body === 'object') {
+    try {
+      return JSON.stringify(body, null, 2);
+    } catch {
+      return bodyText;
+    }
+  }
+  return bodyText;
+};
+
+const truncateTestResponse = (text: string): string => {
+  if (text.length <= TEST_RESPONSE_PREVIEW_MAX_LENGTH) return text;
+  return `${text.slice(0, TEST_RESPONSE_PREVIEW_MAX_LENGTH)}\n...`;
 };
 
 // Status icon components
@@ -126,6 +144,7 @@ export function AiProvidersOpenAIEditPage() {
 
   const swipeRef = useEdgeSwipeBack({ onBack: handleBack });
   const [isTestingKeys, setIsTestingKeys] = useState(false);
+  const [activeTestDetailIndex, setActiveTestDetailIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -236,11 +255,24 @@ export function AiProvidersOpenAIEditPage() {
           { timeout: OPENAI_TEST_TIMEOUT_MS }
         );
 
+        const responseBodyText = truncateTestResponse(formatTestResponseBody(result.body, result.bodyText));
+
         if (result.statusCode < 200 || result.statusCode >= 300) {
-          throw new Error(getApiCallErrorMessage(result));
+          setDraftKeyTestStatus(keyIndex, {
+            status: 'error',
+            message: getApiCallErrorMessage(result),
+            responseStatusCode: result.statusCode,
+            responseBodyText,
+          });
+          return false;
         }
 
-        setDraftKeyTestStatus(keyIndex, { status: 'success', message: '' });
+        setDraftKeyTestStatus(keyIndex, {
+          status: 'success',
+          message: '',
+          responseStatusCode: result.statusCode,
+          responseBodyText,
+        });
         return true;
       } catch (err: unknown) {
         const message = getErrorMessage(err);
@@ -318,6 +350,7 @@ export function AiProvidersOpenAIEditPage() {
     setTestStatus('loading');
     setTestMessage(t('ai_providers.openai_test_running'));
     resetDraftKeyTestStatuses(form.apiKeyEntries.length);
+    setActiveTestDetailIndex(null);
 
     try {
       const results = await Promise.all(validKeyIndexes.map((index) => runSingleKeyTest(index)));
@@ -426,7 +459,13 @@ export function AiProvidersOpenAIEditPage() {
           {/* 数据行 */}
           {list.map((entry, index) => {
             const keyStatus = keyTestStatuses[index]?.status ?? 'idle';
+            const keyTestStatus = keyTestStatuses[index];
             const canTestKey = Boolean(entry.apiKey?.trim()) && hasConfiguredModels;
+            const hasTestDetails = Boolean(
+              keyTestStatus?.responseBodyText ||
+              keyTestStatus?.message ||
+              keyTestStatus?.responseStatusCode
+            );
 
             return (
               <div key={index} className={styles.keyTableRow}>
@@ -434,11 +473,20 @@ export function AiProvidersOpenAIEditPage() {
                 <div className={styles.keyTableColIndex}>{index + 1}</div>
 
                 {/* 状态指示灯 */}
-                <div
-                  className={styles.keyTableColStatus}
-                  title={keyTestStatuses[index]?.message || ''}
-                >
-                  <StatusIcon status={keyStatus} />
+                <div className={styles.keyTableColStatus}>
+                  <button
+                    type="button"
+                    className={styles.keyStatusButton}
+                    title={keyTestStatus?.message || t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                    aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                    disabled={!hasTestDetails}
+                    onClick={() => {
+                      if (!hasTestDetails) return;
+                      setActiveTestDetailIndex(index);
+                    }}
+                  >
+                    <StatusIcon status={keyStatus} />
+                  </button>
                 </div>
 
                 {/* Key 输入框 */}
@@ -493,41 +541,50 @@ export function AiProvidersOpenAIEditPage() {
     );
   };
 
+  const activeTestDetail = activeTestDetailIndex !== null ? keyTestStatuses[activeTestDetailIndex] : undefined;
+  const activeTestResponseBody =
+    activeTestDetail?.responseBodyText?.trim() ||
+    t('ai_providers.openai_test_no_response_body', { defaultValue: 'No response body' });
+  const activeTestResponseMeta = activeTestDetail?.responseStatusCode
+    ? `HTTP ${activeTestDetail.responseStatusCode}`
+    : activeTestDetail?.message || '';
+
   return (
-    <SecondaryScreenShell
-      ref={swipeRef}
-      contentClassName={layoutStyles.content}
-      title={title}
-      onBack={handleBack}
-      backLabel={t('common.back')}
-      backAriaLabel={t('common.back')}
-      hideTopBarBackButton
-      hideTopBarRightAction
-      floatingAction={
-        <div className={layoutStyles.floatingActions}>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleBack}
-            className={layoutStyles.floatingBackButton}
-          >
-            {t('common.back')}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => void handleSave()}
-            loading={saving}
-            disabled={!canSave}
-            className={layoutStyles.floatingSaveButton}
-          >
-            {t('common.save')}
-          </Button>
-        </div>
-      }
-      isLoading={loading}
-      loadingLabel={t('common.loading')}
-    >
-      <Card>
+    <>
+      <SecondaryScreenShell
+        ref={swipeRef}
+        contentClassName={layoutStyles.content}
+        title={title}
+        onBack={handleBack}
+        backLabel={t('common.back')}
+        backAriaLabel={t('common.back')}
+        hideTopBarBackButton
+        hideTopBarRightAction
+        floatingAction={
+          <div className={layoutStyles.floatingActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleBack}
+              className={layoutStyles.floatingBackButton}
+            >
+              {t('common.back')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void handleSave()}
+              loading={saving}
+              disabled={!canSave}
+              className={layoutStyles.floatingSaveButton}
+            >
+              {t('common.save')}
+            </Button>
+          </div>
+        }
+        isLoading={loading}
+        loadingLabel={t('common.loading')}
+      >
+        <Card>
         {invalidIndexParam || invalidIndex ? (
           <div className={styles.sectionHint}>{t('common.invalid_provider_index')}</div>
         ) : (
@@ -692,7 +749,27 @@ export function AiProvidersOpenAIEditPage() {
             </div>
           </div>
         )}
-      </Card>
-    </SecondaryScreenShell>
+        </Card>
+      </SecondaryScreenShell>
+      <Modal
+        open={activeTestDetailIndex !== null && Boolean(activeTestDetail)}
+        onClose={() => setActiveTestDetailIndex(null)}
+        title={t('ai_providers.openai_test_response_title', {
+          defaultValue: 'Test Response #{{index}}',
+          index: activeTestDetailIndex !== null ? activeTestDetailIndex + 1 : '',
+        })}
+        width={760}
+      >
+        <div className={styles.keyTestResponseModal}>
+          {activeTestResponseMeta && (
+            <div className={styles.keyTestResponseMeta}>{activeTestResponseMeta}</div>
+          )}
+          {activeTestDetail?.message && (
+            <div className={styles.keyTestResponseMessage}>{activeTestDetail.message}</div>
+          )}
+          <pre className={styles.keyTestResponseBody}>{activeTestResponseBody}</pre>
+        </div>
+      </Modal>
+    </>
   );
 }
