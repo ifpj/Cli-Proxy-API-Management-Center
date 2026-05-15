@@ -18,6 +18,8 @@ import {
 import type { AmpcodeFormState, AmpcodeUpstreamApiKeyEntry, ModelEntry } from './types';
 
 export const DISABLE_ALL_MODELS_RULE = '*';
+const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com';
+export const DEFAULT_GEMINI_TEST_MODEL = 'gemini-2.5-flash';
 
 export const hasDisableAllModelsRule = (models?: string[]) =>
   Array.isArray(models) &&
@@ -98,6 +100,34 @@ export const buildClaudeMessagesEndpoint = (baseUrl: string): string => {
     return `${trimmed}/messages`;
   }
   return `${trimmed}/v1/messages`;
+};
+
+export const normalizeGeminiBaseUrl = (baseUrl: string): string => {
+  const trimmedInput = String(baseUrl || '').trim();
+  let trimmed = trimmedInput ? normalizeOpenAIBaseUrl(trimmedInput) : DEFAULT_GEMINI_BASE_URL;
+  trimmed = trimmed.replace(/\/+$/g, '');
+  trimmed = trimmed.replace(/\/v1beta\/models(?:\/.*)?$/i, '');
+  trimmed = trimmed.replace(/\/v1beta(?:\/.*)?$/i, '');
+  return trimmed;
+};
+
+export const buildGeminiGenerateContentEndpoint = (baseUrl: string, model: string): string => {
+  const trimmed = normalizeGeminiBaseUrl(baseUrl);
+  const modelName = String(model || '').trim().replace(/^\/?models\//i, '');
+  if (!trimmed || !modelName) return '';
+  return `${trimmed}/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
+};
+
+export const buildCodexChatCompletionsEndpoint = (baseUrl: string): string => {
+  const trimmed = normalizeOpenAIBaseUrl(baseUrl);
+  if (!trimmed) return '';
+  if (/\/v1\/chat\/completions$/i.test(trimmed) || /\/chat\/completions$/i.test(trimmed)) {
+    return trimmed;
+  }
+  if (/\/v1$/i.test(trimmed)) {
+    return `${trimmed}/chat/completions`;
+  }
+  return `${trimmed}/v1/chat/completions`;
 };
 
 export type ProviderRecentUsageMap = Map<string, Map<string, RecentRequestUsageEntry>>;
