@@ -38,11 +38,16 @@ type ProviderBatchTestResult = {
   message: string;
   responseStatusCode?: number;
   responseBodyText?: string;
+  successMessage?: string;
+  failureMessage?: string;
+  successResponseBodyText?: string;
+  failureResponseBodyText?: string;
 };
 
 type ActiveProviderTestDetail = {
   provider: ProviderBatchTestKind;
   index: number;
+  group?: 'success' | 'failure';
 };
 
 export function AiProvidersPage() {
@@ -531,6 +536,8 @@ export function AiProvidersPage() {
 
         const successCount = details.filter((detail) => detail.ok).length;
         const failCount = details.length - successCount;
+        const successDetails = details.filter((detail) => detail.ok);
+        const failureDetails = details.filter((detail) => !detail.ok);
         const message =
           failCount === 0
             ? t('ai_providers.openai_test_all_success', { count: successCount })
@@ -544,6 +551,26 @@ export function AiProvidersPage() {
           status: failCount === 0 ? 'success' : 'error',
           message,
           responseBodyText: JSON.stringify(details, null, 2),
+          successMessage:
+            successCount > 0
+              ? t('ai_providers.openai_test_success_count', {
+                  defaultValue: 'Passed: {{count}}',
+                  count: successCount,
+                })
+              : undefined,
+          failureMessage:
+            failCount > 0
+              ? t('ai_providers.openai_test_failure_count', {
+                  defaultValue: 'Failed: {{count}}',
+                  count: failCount,
+                })
+              : undefined,
+          successResponseBodyText: successCount
+            ? JSON.stringify(successDetails, null, 2)
+            : undefined,
+          failureResponseBodyText: failCount
+            ? JSON.stringify(failureDetails, null, 2)
+            : undefined,
         });
         showNotification(message, failCount === 0 ? 'success' : successCount === 0 ? 'error' : 'warning');
       } finally {
@@ -841,20 +868,36 @@ export function AiProvidersPage() {
   const activeTestResult = activeProviderTestDetail
     ? getProviderTestResult(activeProviderTestDetail.provider, activeProviderTestDetail.index)
     : undefined;
+  const activeOpenAIGroupedBody =
+    activeProviderTestDetail?.provider === 'openai' && activeProviderTestDetail.group === 'success'
+      ? activeTestResult?.successResponseBodyText
+      : activeProviderTestDetail?.provider === 'openai' &&
+          activeProviderTestDetail.group === 'failure'
+        ? activeTestResult?.failureResponseBodyText
+        : undefined;
   const activeTestResponseBody =
+    activeOpenAIGroupedBody?.trim() ||
     activeTestResult?.responseBodyText?.trim() ||
     t('ai_providers.openai_test_no_response_body', { defaultValue: 'No response body' });
   const activeTestResponseMeta = activeTestResult?.responseStatusCode
     ? `HTTP ${activeTestResult.responseStatusCode}`
     : activeTestResult?.message || '';
   const activeTestTitle = activeProviderTestDetail
-    ? t(
-        activeProviderTestDetail.provider === 'gemini'
-          ? 'ai_providers.gemini_test_title'
-          : activeProviderTestDetail.provider === 'codex'
-            ? 'ai_providers.codex_test_title'
-            : 'ai_providers.openai_test_title'
-      )
+    ? activeProviderTestDetail.provider === 'openai' && activeProviderTestDetail.group === 'success'
+      ? t('ai_providers.openai_test_success_title', {
+          defaultValue: 'OpenAI Test Successes',
+        })
+      : activeProviderTestDetail.provider === 'openai' && activeProviderTestDetail.group === 'failure'
+        ? t('ai_providers.openai_test_failure_title', {
+            defaultValue: 'OpenAI Test Failures',
+          })
+        : t(
+            activeProviderTestDetail.provider === 'gemini'
+              ? 'ai_providers.gemini_test_title'
+              : activeProviderTestDetail.provider === 'codex'
+                ? 'ai_providers.codex_test_title'
+                : 'ai_providers.openai_test_title'
+          )
     : '';
 
   return (
@@ -954,7 +997,9 @@ export function AiProvidersPage() {
             onDelete={deleteOpenai}
             onToggle={(index, enabled) => void setOpenAIProviderEnabled(index, enabled)}
             onTest={(index) => void testOpenAIProvider(index)}
-            onOpenTestResult={(index) => setActiveProviderTestDetail({ provider: 'openai', index })}
+            onOpenTestResult={(index, group) =>
+              setActiveProviderTestDetail({ provider: 'openai', index, group })
+            }
           />
         </div>
       </div>
