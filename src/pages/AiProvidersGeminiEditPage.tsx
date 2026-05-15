@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { HeaderInputList } from '@/components/ui/HeaderInputList';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { Modal } from '@/components/ui/Modal';
@@ -11,19 +12,31 @@ import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
-import { modelsApi, providersApi } from '@/services/api';
+import { apiCallApi, getApiCallErrorMessage, modelsApi, providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { GeminiKeyConfig } from '@/types';
-import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
+import { buildHeaderObject, hasHeader, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import { areKeyValueEntriesEqual, areModelEntriesEqual, areStringArraysEqual } from '@/utils/compare';
 import type { ModelInfo } from '@/utils/models';
 import { entriesToModels, modelsToEntries } from '@/components/ui/modelInputListUtils';
-import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
+import {
+  buildGeminiGenerateContentEndpoint,
+  DEFAULT_GEMINI_TEST_MODEL,
+  excludedModelsToText,
+  parseExcludedModels,
+} from '@/components/providers/utils';
+import { formatTestResponseBody, truncateTestResponse } from '@/components/providers/testResponseUtils';
 import type { GeminiFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 import styles from './AiProvidersPage.module.scss';
 
 type LocationState = { fromAiProviders?: boolean } | null;
+
+type TestResponseDetail = {
+  message?: string;
+  responseStatusCode?: number;
+  responseBodyText?: string;
+};
 
 const buildEmptyForm = (): GeminiFormState => ({
   apiKey: '',
@@ -36,6 +49,14 @@ const buildEmptyForm = (): GeminiFormState => ({
   excludedModels: [],
   excludedText: '',
 });
+
+const GEMINI_TEST_TIMEOUT_MS = 30_000;
+
+const getErrorMessage = (err: unknown) => {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  return '';
+};
 
 const parseIndexParam = (value: string | undefined) => {
   if (!value) return null;
@@ -112,6 +133,12 @@ export function AiProvidersGeminiEditPage() {
   const [modelDiscoveryError, setModelDiscoveryError] = useState('');
   const [modelDiscoverySearch, setModelDiscoverySearch] = useState('');
   const [modelDiscoverySelected, setModelDiscoverySelected] = useState<Set<string>>(new Set());
+  const [testModel, setTestModel] = useState('');
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
+  const [testResponseDetail, setTestResponseDetail] = useState<TestResponseDetail | null>(null);
+  const [isTestResponseOpen, setIsTestResponseOpen] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const autoFetchSignatureRef = useRef<string>('');
   const modelDiscoveryRequestIdRef = useRef(0);
 
@@ -200,7 +227,78 @@ export function AiProvidersGeminiEditPage() {
     setBaseline(buildGeminiBaseline(nextForm));
   }, [initialData, loading]);
 
-  const canSave = !disableControls && !saving && !loading && !invalidIndexParam && !invalidIndex;
+  const canSave =
+    !disableControls && !saving && !loading && !invalidIndexParam && !invalidIndex && !isTesting;
+
+  const modelSelectOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options = form.modelEntries.reduce<Array<{ value: string; label: string }>>((acc, entry) => {
+      const name = stripGeminiModelResourceName(entry.name).trim();
+      if (!name || seen.has(name)) return acc;
+      seen.add(name);
+      const alias = entry.alias.trim();
+      acc.push({
+        value: name,
+        label: alias && alias !== name ? `${name} (${alias})` : name,
+      });
+      return acc;
+    }, []);
+    return options.length
+      ? options
+      : [
+          {
+            value: DEFAULT_GEMINI_TEST_MODEL,
+            label: t('ai_providers.gemini_test_default_model', {
+              model: DEFAULT_GEMINI_TEST_MODEL,
+            }),
+          },
+        ];
+  }, [form.modelEntries, t]);
+
+  const availableModels = useMemo(
+    () => modelSelectOptions.map((option) => option.value),
+    [modelSelectOptions]
+  );
+
+  const connectivityConfigSignature = useMemo(() => {
+    const headersSignature = form.headers
+      .map((entry) => `${entry.key.trim()}:${entry.value.trim()}`)
+      .join('|');
+    const modelsSignature = form.modelEntries
+      .map((entry) => `${entry.name.trim()}:${entry.alias.trim()}`)
+      .join('|');
+    return [
+      form.apiKey.trim(),
+      form.baseUrl?.trim() ?? '',
+      testModel.trim(),
+      headersSignature,
+      modelsSignature,
+    ].join('||');
+  }, [form.apiKey, form.baseUrl, form.headers, form.modelEntries, testModel]);
+  const previousConnectivityConfigRef = useRef(connectivityConfigSignature);
+
+  useEffect(() => {
+    if (previousConnectivityConfigRef.current === connectivityConfigSignature) {
+      return;
+    }
+    previousConnectivityConfigRef.current = connectivityConfigSignature;
+    setTestStatus('idle');
+    setTestMessage('');
+    setTestResponseDetail(null);
+    setIsTestResponseOpen(false);
+  }, [connectivityConfigSignature]);
+
+  useEffect(() => {
+    if (availableModels.length === 0) {
+      if (testModel) {
+        setTestModel('');
+      }
+      return;
+    }
+    if (!testModel || !availableModels.includes(testModel)) {
+      setTestModel(availableModels[0]);
+    }
+  }, [availableModels, testModel]);
 
   const discoveredModelsFiltered = useMemo(() => {
     const filter = modelDiscoverySearch.trim().toLowerCase();
@@ -385,6 +483,122 @@ export function AiProvidersGeminiEditPage() {
     setModelDiscoveryOpen(false);
   };
 
+  const runGeminiConnectivityTest = useCallback(async () => {
+    if (isTesting) return;
+
+    const modelName = testModel.trim() || availableModels[0] || DEFAULT_GEMINI_TEST_MODEL;
+    if (!modelName) {
+      const message = t('ai_providers.gemini_test_model_required');
+      setTestStatus('error');
+      setTestMessage(message);
+      setTestResponseDetail({ message });
+      showNotification(message, 'error');
+      return;
+    }
+
+    const endpoint = buildGeminiGenerateContentEndpoint(form.baseUrl ?? '', modelName);
+    if (!endpoint) {
+      const message = t('ai_providers.gemini_test_endpoint_invalid');
+      setTestStatus('error');
+      setTestMessage(message);
+      setTestResponseDetail({ message });
+      showNotification(message, 'error');
+      return;
+    }
+
+    const customHeaders = buildHeaderObject(form.headers);
+    const apiKey = form.apiKey.trim();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...customHeaders,
+    };
+    if (apiKey && !hasHeader(headers, 'x-goog-api-key')) {
+      headers['x-goog-api-key'] = apiKey;
+    }
+
+    if (!apiKey && !hasHeader(headers, 'x-goog-api-key') && !hasHeader(headers, 'authorization')) {
+      const message = t('ai_providers.gemini_test_key_required');
+      setTestStatus('error');
+      setTestMessage(message);
+      setTestResponseDetail({ message });
+      showNotification(message, 'error');
+      return;
+    }
+
+      setIsTesting(true);
+      setTestStatus('loading');
+      setTestMessage(t('ai_providers.gemini_test_running'));
+      setTestResponseDetail(null);
+      setIsTestResponseOpen(false);
+
+    try {
+      const result = await apiCallApi.request(
+        {
+          authIndex: form.authIndex,
+          method: 'POST',
+          url: endpoint,
+          header: headers,
+          data: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
+            generationConfig: { maxOutputTokens: 8 },
+          }),
+        },
+        { timeout: GEMINI_TEST_TIMEOUT_MS }
+      );
+
+      const responseBodyText = truncateTestResponse(formatTestResponseBody(result.body, result.bodyText));
+
+      if (result.statusCode < 200 || result.statusCode >= 300) {
+        const message = getApiCallErrorMessage(result);
+        const resolvedMessage = `${t('ai_providers.gemini_test_failed')}: ${message}`;
+        setTestStatus('error');
+        setTestMessage(resolvedMessage);
+        setTestResponseDetail({
+          message,
+          responseStatusCode: result.statusCode,
+          responseBodyText,
+        });
+        showNotification(resolvedMessage, 'error');
+        return;
+      }
+
+      const message = t('ai_providers.gemini_test_success');
+      setTestStatus('success');
+      setTestMessage(message);
+      setTestResponseDetail({
+        responseStatusCode: result.statusCode,
+        responseBodyText,
+      });
+      showNotification(message, 'success');
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      const errorCode =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? String((err as { code?: string }).code)
+          : '';
+      const isTimeout = errorCode === 'ECONNABORTED' || message.toLowerCase().includes('timeout');
+      const resolvedMessage = isTimeout
+        ? t('ai_providers.gemini_test_timeout', { seconds: GEMINI_TEST_TIMEOUT_MS / 1000 })
+        : `${t('ai_providers.gemini_test_failed')}: ${message || t('common.unknown_error')}`;
+      setTestStatus('error');
+      setTestMessage(resolvedMessage);
+      setTestResponseDetail({ message: resolvedMessage });
+      showNotification(resolvedMessage, 'error');
+    } finally {
+      setIsTesting(false);
+    }
+  }, [
+    availableModels,
+    form.apiKey,
+    form.authIndex,
+    form.baseUrl,
+    form.headers,
+    isTesting,
+    showNotification,
+    t,
+    testModel,
+  ]);
+
   const normalizedHeaders = useMemo(() => normalizeHeaderEntries(form.headers), [form.headers]);
   const normalizedModels = useMemo(
     () => normalizeModelEntries(form.modelEntries),
@@ -495,45 +709,57 @@ export function AiProvidersGeminiEditPage() {
   ]);
 
   const canOpenModelDiscovery =
-    !disableControls && !saving && !loading && !invalidIndexParam && !invalidIndex;
+    !disableControls && !saving && !loading && !invalidIndexParam && !invalidIndex && !isTesting;
   const canApplyModelDiscovery =
-    !disableControls && !saving && !modelDiscoveryFetching && modelDiscoverySelected.size > 0;
+    !disableControls && !saving && !isTesting && !modelDiscoveryFetching && modelDiscoverySelected.size > 0;
+  const hasTestResponseDetail = Boolean(
+    testResponseDetail?.responseBodyText ||
+      testResponseDetail?.message ||
+      testResponseDetail?.responseStatusCode
+  );
+  const activeTestResponseBody =
+    testResponseDetail?.responseBodyText?.trim() ||
+    t('ai_providers.openai_test_no_response_body', { defaultValue: 'No response body' });
+  const activeTestResponseMeta = testResponseDetail?.responseStatusCode
+    ? `HTTP ${testResponseDetail.responseStatusCode}`
+    : testResponseDetail?.message || '';
 
   return (
-    <SecondaryScreenShell
-      ref={swipeRef}
-      contentClassName={layoutStyles.content}
-      title={title}
-      onBack={handleBack}
-      backLabel={t('common.back')}
-      backAriaLabel={t('common.back')}
-      hideTopBarBackButton
-      hideTopBarRightAction
-      floatingAction={
-        <div className={layoutStyles.floatingActions}>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleBack}
-            className={layoutStyles.floatingBackButton}
-          >
-            {t('common.back')}
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleSave}
-            loading={saving}
-            disabled={!canSave}
-            className={layoutStyles.floatingSaveButton}
-          >
-            {t('common.save')}
-          </Button>
-        </div>
-      }
-      isLoading={loading}
-      loadingLabel={t('common.loading')}
-    >
-      <Card>
+    <>
+      <SecondaryScreenShell
+        ref={swipeRef}
+        contentClassName={layoutStyles.content}
+        title={title}
+        onBack={handleBack}
+        backLabel={t('common.back')}
+        backAriaLabel={t('common.back')}
+        hideTopBarBackButton
+        hideTopBarRightAction
+        floatingAction={
+          <div className={layoutStyles.floatingActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleBack}
+              className={layoutStyles.floatingBackButton}
+            >
+              {t('common.back')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              loading={saving}
+              disabled={!canSave}
+              className={layoutStyles.floatingSaveButton}
+            >
+              {t('common.save')}
+            </Button>
+          </div>
+        }
+        isLoading={loading}
+        loadingLabel={t('common.loading')}
+      >
+        <Card>
         {error && <div className="error-box">{error}</div>}
         {invalidIndexParam || invalidIndex ? (
           <div className="hint">{t('common.invalid_provider_index')}</div>
@@ -544,7 +770,7 @@ export function AiProvidersGeminiEditPage() {
               placeholder={t('ai_providers.gemini_add_modal_key_placeholder')}
               value={form.apiKey}
               onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
-              disabled={disableControls || saving}
+              disabled={disableControls || saving || isTesting}
             />
             <Input
               label={t('ai_providers.priority_label')}
@@ -560,7 +786,7 @@ export function AiProvidersGeminiEditPage() {
                   priority: parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined,
                 }));
               }}
-              disabled={disableControls || saving}
+              disabled={disableControls || saving || isTesting}
             />
             <Input
               label={t('ai_providers.prefix_label')}
@@ -568,21 +794,21 @@ export function AiProvidersGeminiEditPage() {
               value={form.prefix ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, prefix: e.target.value }))}
               hint={t('ai_providers.prefix_hint')}
-              disabled={disableControls || saving}
+              disabled={disableControls || saving || isTesting}
             />
             <Input
               label={t('ai_providers.gemini_base_url_label')}
               placeholder={t('ai_providers.gemini_base_url_placeholder')}
               value={form.baseUrl ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
-              disabled={disableControls || saving}
+              disabled={disableControls || saving || isTesting}
             />
             <Input
               label={t('ai_providers.gemini_add_modal_proxy_label')}
               placeholder={t('ai_providers.gemini_add_modal_proxy_placeholder')}
               value={form.proxyUrl ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
-              disabled={disableControls || saving}
+              disabled={disableControls || saving || isTesting}
             />
             <HeaderInputList
               entries={form.headers}
@@ -592,7 +818,7 @@ export function AiProvidersGeminiEditPage() {
               valuePlaceholder={t('common.custom_headers_value_placeholder')}
               removeButtonTitle={t('common.delete')}
               removeButtonAriaLabel={t('common.delete')}
-              disabled={disableControls || saving}
+              disabled={disableControls || saving || isTesting}
             />
 
             <div className={styles.modelConfigSection}>
@@ -610,7 +836,7 @@ export function AiProvidersGeminiEditPage() {
                         modelEntries: [...prev.modelEntries, { name: '', alias: '' }],
                       }))
                     }
-                    disabled={disableControls || saving}
+                    disabled={disableControls || saving || isTesting}
                   >
                     {t('ai_providers.gemini_models_add_btn')}
                   </Button>
@@ -631,7 +857,7 @@ export function AiProvidersGeminiEditPage() {
                 onChange={(entries) => setForm((prev) => ({ ...prev, modelEntries: entries }))}
                 namePlaceholder={t('common.model_name_placeholder')}
                 aliasPlaceholder={t('common.model_alias_placeholder')}
-                disabled={disableControls || saving}
+                disabled={disableControls || saving || isTesting}
                 hideAddButton
                 className={styles.modelInputList}
                 rowClassName={styles.modelInputRow}
@@ -640,6 +866,76 @@ export function AiProvidersGeminiEditPage() {
                 removeButtonTitle={t('common.delete')}
                 removeButtonAriaLabel={t('common.delete')}
               />
+
+              <div className={styles.modelTestPanel}>
+                <div className={styles.modelTestMeta}>
+                  <label className={styles.modelTestLabel}>{t('ai_providers.gemini_test_title')}</label>
+                  <span className={styles.modelTestHint}>{t('ai_providers.gemini_test_hint')}</span>
+                </div>
+                <div className={styles.modelTestControls}>
+                  <Select
+                    value={testModel}
+                    options={modelSelectOptions}
+                    onChange={(value) => {
+                      setTestModel(value);
+                      setTestStatus('idle');
+                      setTestMessage('');
+                    }}
+                    placeholder={
+                      availableModels.length
+                        ? t('ai_providers.gemini_test_select_placeholder')
+                        : t('ai_providers.gemini_test_select_empty')
+                    }
+                    className={styles.openaiTestSelect}
+                    ariaLabel={t('ai_providers.gemini_test_title')}
+                    disabled={
+                      disableControls ||
+                      saving ||
+                      isTesting ||
+                      testStatus === 'loading' ||
+                      availableModels.length === 0
+                    }
+                  />
+                  <Button
+                    variant={testStatus === 'error' ? 'danger' : 'secondary'}
+                    size="sm"
+                    onClick={() => void runGeminiConnectivityTest()}
+                    loading={testStatus === 'loading'}
+                    disabled={
+                      disableControls ||
+                      saving ||
+                      isTesting ||
+                      testStatus === 'loading' ||
+                      availableModels.length === 0
+                    }
+                    className={styles.modelTestAllButton}
+                  >
+                    {t('ai_providers.gemini_test_action')}
+                  </Button>
+                </div>
+              </div>
+
+              {testMessage && (
+                <button
+                  type="button"
+                  className={`status-badge ${
+                    testStatus === 'error'
+                      ? 'error'
+                      : testStatus === 'success'
+                        ? 'success'
+                        : 'muted'
+                  } ${styles.testResultStatusButton}`}
+                  disabled={!hasTestResponseDetail}
+                  onClick={() => {
+                    if (!hasTestResponseDetail) return;
+                    setIsTestResponseOpen(true);
+                  }}
+                  title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                  aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                >
+                  {testMessage}
+                </button>
+              )}
             </div>
 
             <div className="form-group">
@@ -650,7 +946,7 @@ export function AiProvidersGeminiEditPage() {
                 value={form.excludedText}
                 onChange={(e) => setForm((prev) => ({ ...prev, excludedText: e.target.value }))}
                 rows={4}
-                disabled={disableControls || saving}
+                disabled={disableControls || saving || isTesting}
               />
               <div className="hint">{t('ai_providers.excluded_models_hint')}</div>
             </div>
@@ -800,7 +1096,24 @@ export function AiProvidersGeminiEditPage() {
             </Modal>
           </>
         )}
-      </Card>
-    </SecondaryScreenShell>
+        </Card>
+      </SecondaryScreenShell>
+      <Modal
+        open={isTestResponseOpen && hasTestResponseDetail}
+        onClose={() => setIsTestResponseOpen(false)}
+        title={t('ai_providers.gemini_test_title')}
+        width={760}
+      >
+        <div className={styles.keyTestResponseModal}>
+          {activeTestResponseMeta && (
+            <div className={styles.keyTestResponseMeta}>{activeTestResponseMeta}</div>
+          )}
+          {testResponseDetail?.message && (
+            <div className={styles.keyTestResponseMessage}>{testResponseDetail.message}</div>
+          )}
+          <pre className={styles.keyTestResponseBody}>{activeTestResponseBody}</pre>
+        </div>
+      </Modal>
+    </>
   );
 }
