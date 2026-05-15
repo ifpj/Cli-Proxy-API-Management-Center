@@ -2,8 +2,15 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  workflow_dispatch:
+
+env:
+  UPSTREAM_REPOSITORY: router-for-me/Cli-Proxy-API-Management-Center
+  VERSION_SUFFIX_PREFIX: -ifpj
 
 jobs:
   build-and-release:
@@ -32,10 +39,32 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Resolve UI version from upstream
+        id: version
+        run: |
+          set -euo pipefail
+          upstream_url="https://github.com/${UPSTREAM_REPOSITORY}.git"
+          git fetch --no-tags "${upstream_url}" '+refs/tags/v*:refs/tags/upstream/v*'
+          upstream_version=""
+          while IFS= read -r tag; do
+            upstream_tag="upstream/${tag}"
+            if git merge-base --is-ancestor "${upstream_tag}" HEAD; then
+              upstream_version="${tag}"
+              break
+            fi
+          done < <(git tag --list 'upstream/v*' | sed 's#^upstream/##' | sort -Vr)
+          if [ -z "${upstream_version}" ]; then
+            upstream_version="${GITHUB_REF_NAME}"
+          fi
+          modification_count="$(git rev-list --count "upstream/${upstream_version}..HEAD" 2>/dev/null || git rev-list --count HEAD)"
+          resolved_version="${upstream_version}${VERSION_SUFFIX_PREFIX}.${modification_count}"
+          echo "version=${resolved_version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved UI version: ${resolved_version}"
+
       - name: Build all-in-one HTML
         run: bun run build
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
 
       - name: Prepare release assets
         run: |
@@ -46,12 +75,12 @@ jobs:
       - name: Generate release notes
         run: |
           set -euo pipefail
-          current_tag="${GITHUB_REF_NAME}"
-          previous_tag="$(git tag --list 'v*' --sort=-v:refname | grep -v "^${current_tag}$" | head -n 1 || true)"
+          release_tag="${{ steps.version.outputs.version }}"
+          previous_tag="$(git tag --list 'v*' --sort=-v:refname | grep -v "^${release_tag}$" | head -n 1 || true)"
           if [ -n "${previous_tag}" ]; then
-            range="${previous_tag}..${current_tag}"
+            range="${previous_tag}..HEAD"
           else
-            range="${current_tag}"
+            range="HEAD"
           fi
 
           : > release-notes.md
@@ -60,6 +89,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
           files: dist/management.html
           body_path: release-notes.md
           draft: false
