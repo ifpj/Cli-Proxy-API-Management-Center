@@ -18,6 +18,8 @@ export type OpenAITestStatus = 'idle' | 'loading' | 'success' | 'error';
 export type KeyTestStatus = {
   status: OpenAITestStatus;
   message: string;
+  responseStatusCode?: number;
+  responseBodyText?: string;
 };
 
 export type OpenAIEditBaseline = {
