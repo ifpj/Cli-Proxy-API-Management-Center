@@ -18,16 +18,28 @@ import {
   type ProviderRecentUsageMap,
 } from '../utils';
 
+type ProviderBatchTestResult = {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  message: string;
+  responseStatusCode?: number;
+  responseBodyText?: string;
+};
+
 interface CodexSectionProps {
   configs: ProviderKeyConfig[];
   usageByProvider: ProviderRecentUsageMap;
   loading: boolean;
   disableControls: boolean;
   isSwitching: boolean;
+  isTestingAll: boolean;
+  testResults: Record<number, ProviderBatchTestResult>;
   onAdd: () => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
+  onTestAll: () => void;
+  onTestOne: (index: number) => void;
+  onOpenTestResult: (index: number) => void;
 }
 
 export function CodexSection({
@@ -36,14 +48,19 @@ export function CodexSection({
   loading,
   disableControls,
   isSwitching,
+  isTestingAll,
+  testResults,
   onAdd,
   onEdit,
   onDelete,
   onToggle,
+  onTestAll,
+  onTestOne,
+  onOpenTestResult,
 }: CodexSectionProps) {
   const { t } = useTranslation();
-  const actionsDisabled = disableControls || loading || isSwitching;
-  const toggleDisabled = disableControls || loading || isSwitching;
+  const actionsDisabled = disableControls || loading || isSwitching || isTestingAll;
+  const toggleDisabled = disableControls || loading || isSwitching || isTestingAll;
 
   const statusBarCache = useMemo(() => {
     const cache = new Map<string, ReturnType<typeof statusBarDataFromRecentRequests>>();
@@ -72,9 +89,20 @@ export function CodexSection({
           </span>
         }
         extra={
-          <Button size="sm" onClick={onAdd} disabled={actionsDisabled}>
-            {t('ai_providers.codex_add_button')}
-          </Button>
+          <div className={styles.providerHeaderActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onTestAll}
+              loading={isTestingAll}
+              disabled={actionsDisabled || configs.length === 0}
+            >
+              {t('ai_providers.codex_test_all_action')}
+            </Button>
+            <Button size="sm" onClick={onAdd} disabled={actionsDisabled}>
+              {t('ai_providers.codex_add_button')}
+            </Button>
+          </div>
         }
       >
         <ProviderList<ProviderKeyConfig>
@@ -112,10 +140,25 @@ export function CodexSection({
             const statusData =
               statusBarCache.get(getProviderConfigKey(item, index)) ||
               statusBarDataFromRecentRequests([]);
+            const testResult = testResults[index];
+            const hasTestDetails = Boolean(
+              testResult?.responseBodyText || testResult?.message || testResult?.responseStatusCode
+            );
 
             return (
               <Fragment>
-                <div className="item-title">{t('ai_providers.codex_item_title')}</div>
+                <div className={styles.providerCardTopBar}>
+                  <div className="item-title">{t('ai_providers.codex_item_title')}</div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onTestOne(index)}
+                    loading={testResult?.status === 'loading'}
+                    disabled={actionsDisabled || !item.apiKey?.trim()}
+                  >
+                    {t('ai_providers.codex_test_action')}
+                  </Button>
+                </div>
                 <div className={styles.fieldRow}>
                   <span className={styles.fieldLabel}>{t('common.api_key')}:</span>
                   <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
@@ -163,6 +206,27 @@ export function CodexSection({
                   <div className="status-badge warning" style={{ marginTop: 8, marginBottom: 0 }}>
                     {t('ai_providers.config_disabled_badge')}
                   </div>
+                )}
+                {testResult?.message && (
+                  <button
+                    type="button"
+                    className={`status-badge ${
+                      testResult.status === 'error'
+                        ? 'error'
+                        : testResult.status === 'success'
+                          ? 'success'
+                          : 'muted'
+                    } ${styles.testResultStatusButton}`}
+                    disabled={!hasTestDetails}
+                    onClick={() => {
+                      if (!hasTestDetails) return;
+                      onOpenTestResult(index);
+                    }}
+                    title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                    aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                  >
+                    {testResult.message}
+                  </button>
                 )}
                 {item.models?.length ? (
                   <div className={styles.modelTagList}>
