@@ -394,6 +394,7 @@
     "openai_filtered_empty_title": "沒有匹配的供應商",
     "openai_filtered_empty_desc": "目前模型篩選下沒有匹配的供應商，請清除篩選後再試一次。",
     "sort_by_name": "依名稱排序",
+    "sort_by_config_order": "依設定檔順序",
     "sort_ascending": "升冪排序",
     "sort_asc_short": "升冪",
     "sort_by_priority": "依優先順序排序",

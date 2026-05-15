@@ -31,7 +31,7 @@ import {
   type ProviderRecentUsageMap,
 } from '../utils';
 
-type SortOption = 'name' | 'priority' | 'recent-success';
+type SortOption = 'config-order' | 'name' | 'priority' | 'recent-success';
 type SortDirection = 'asc' | 'desc';
 
 interface FloatingToolbarStyle {
@@ -86,7 +86,7 @@ export function OpenAISection({
   const isTransitionAnimating = pageTransitionLayer?.isAnimating ?? false;
   const actionsDisabled = disableControls || loading || isSwitching;
   const toggleDisabled = disableControls || loading || isSwitching;
-  const [sortOption, setSortOption] = useState<SortOption>('priority');
+  const [sortOption, setSortOption] = useState<SortOption>('config-order');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -262,6 +262,7 @@ export function OpenAISection({
 
   const sortOptions = useMemo(
     () => [
+      { value: 'config-order', label: t('ai_providers.sort_by_config_order') },
       { value: 'priority', label: t('ai_providers.sort_by_priority') },
       { value: 'name', label: t('ai_providers.sort_by_name') },
       { value: 'recent-success', label: t('ai_providers.sort_by_recent_success') },
@@ -289,6 +290,8 @@ export function OpenAISection({
         : null;
 
     switch (sortOption) {
+      case 'config-order':
+        break;
       case 'name':
         sorted.sort((a, b) => direction * a.config.name.localeCompare(b.config.name));
         break;
@@ -359,7 +362,7 @@ export function OpenAISection({
         onChange={(value) => handleSortOptionChange(value as SortOption)}
         className={styles.sortSelect}
         disabled={actionsDisabled}
-        ariaLabel={t('ai_providers.sort_by_priority')}
+        ariaLabel={t('ai_providers.sort_label')}
         fullWidth={false}
       />
       <Button
@@ -367,7 +370,7 @@ export function OpenAISection({
         size="sm"
         onClick={toggleSortDirection}
         className={styles.sortDirectionButton}
-        disabled={actionsDisabled}
+        disabled={actionsDisabled || sortOption === 'config-order'}
         title={
           sortDirection === 'asc'
             ? t('ai_providers.sort_ascending')

@@ -394,6 +394,7 @@
     "openai_filtered_empty_title": "没有匹配的提供商",
     "openai_filtered_empty_desc": "当前模型筛选下没有匹配的提供商，请清除筛选后重试。",
     "sort_by_name": "按名称排序",
+    "sort_by_config_order": "按配置文件顺序",
     "sort_ascending": "升序排序",
     "sort_asc_short": "升序",
     "sort_by_priority": "按优先级排序",
