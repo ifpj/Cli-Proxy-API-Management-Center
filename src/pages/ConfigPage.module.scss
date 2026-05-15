@@ -248,6 +248,13 @@
       background: color-mix(in srgb, var(--text-primary) 5%, transparent);
     }
 
+    .cm-editor.cm-has-selection {
+      .cm-activeLine,
+      .cm-activeLineGutter {
+        background: transparent;
+      }
+    }
+
     .cm-selectionMatch {
       background: rgba(224, 170, 20, 0.24);
     }
