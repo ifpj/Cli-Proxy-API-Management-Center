@@ -81,6 +81,10 @@ export function ClaudeSection({
           items={configs}
           loading={loading}
           keyField={(item, index) => getProviderConfigKey(item, index)}
+          listClassName={styles.openaiProviderList}
+          rowClassName={styles.openaiProviderCard}
+          metaClassName={styles.openaiProviderMeta}
+          actionsClassName={styles.openaiProviderActions}
           emptyTitle={t('ai_providers.claude_empty_title')}
           emptyDescription={t('ai_providers.claude_empty_desc')}
           onEdit={(_, index) => onEdit(index)}
