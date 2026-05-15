@@ -242,6 +242,7 @@ export function AiProvidersOpenAIEditPage() {
       try {
         const result = await apiCallApi.request(
           {
+            authIndex: keyEntry.authIndex,
             method: 'POST',
             url: endpoint,
             header: Object.keys(headers).length ? headers : undefined,
