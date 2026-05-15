@@ -75,6 +75,11 @@ $openai-toolbar-control-height: 36px;
   gap: $spacing-sm;
   min-height: 0;
   min-width: 0;
+
+  :global(.item-title) {
+    font-weight: 700;
+    color: var(--text-primary);
+  }
 }
 
 .openaiProviderMeta {
