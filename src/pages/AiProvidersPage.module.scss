@@ -123,6 +123,13 @@ $openai-toolbar-control-height: 36px;
   }
 }
 
+.openaiTestResultGroup {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+  align-items: stretch;
+}
+
 // 排序控件
 .sortControls {
   display: flex;
