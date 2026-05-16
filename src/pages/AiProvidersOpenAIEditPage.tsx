@@ -145,6 +145,8 @@ export function AiProvidersOpenAIEditPage() {
   const swipeRef = useEdgeSwipeBack({ onBack: handleBack });
   const [isTestingKeys, setIsTestingKeys] = useState(false);
   const [activeTestDetailIndex, setActiveTestDetailIndex] = useState<number | null>(null);
+  const [bulkKeysOpen, setBulkKeysOpen] = useState(false);
+  const [bulkKeysText, setBulkKeysText] = useState('');
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -424,13 +426,6 @@ export function AiProvidersOpenAIEditPage() {
       setTestMessage('');
     };
 
-    const addEntry = () => {
-      setForm((prev) => ({ ...prev, apiKeyEntries: [...list, buildApiKeyEntry()] }));
-      resetDraftKeyTestStatuses(list.length + 1);
-      setTestStatus('idle');
-      setTestMessage('');
-    };
-
     return (
       <div className={styles.keyEntriesList}>
         <div className={styles.keyEntriesToolbar}>
@@ -440,11 +435,11 @@ export function AiProvidersOpenAIEditPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={addEntry}
+            onClick={() => setBulkKeysOpen(true)}
             disabled={saving || disableControls || isTestingKeys}
             className={styles.addKeyButton}
           >
-            {t('ai_providers.openai_keys_add_btn')}
+            {t('ai_providers.openai_keys_bulk_toggle')}
           </Button>
         </div>
         <div className={styles.keyTableShell}>
@@ -549,6 +544,39 @@ export function AiProvidersOpenAIEditPage() {
   const activeTestResponseMeta = activeTestDetail?.responseStatusCode
     ? `HTTP ${activeTestDetail.responseStatusCode}`
     : activeTestDetail?.message || '';
+
+  const addBulkEntries = () => {
+    const parsedKeys = bulkKeysText
+      .split(/[\s,;，；]+/g)
+      .map((key) => key.trim())
+      .filter(Boolean);
+    const currentEntries = form.apiKeyEntries.length ? form.apiKeyEntries : [buildApiKeyEntry()];
+    const existingKeys = new Set(currentEntries.map((entry) => entry.apiKey.trim()).filter(Boolean));
+    const nextKeys: string[] = [];
+
+    parsedKeys.forEach((key) => {
+      if (existingKeys.has(key)) return;
+      existingKeys.add(key);
+      nextKeys.push(key);
+    });
+
+    if (nextKeys.length === 0) {
+      showNotification(t('ai_providers.openai_keys_bulk_no_new'), 'warning');
+      return;
+    }
+
+    const baseEntries = currentEntries.filter(
+      (entry) => entry.apiKey.trim() || entry.proxyUrl?.trim()
+    );
+    const next = [...baseEntries, ...nextKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))];
+    setForm((prev) => ({ ...prev, apiKeyEntries: next }));
+    resetDraftKeyTestStatuses(next.length);
+    setTestStatus('idle');
+    setTestMessage('');
+    setBulkKeysText('');
+    setBulkKeysOpen(false);
+    showNotification(t('ai_providers.openai_keys_bulk_added', { count: nextKeys.length }), 'success');
+  };
 
   return (
     <>
@@ -752,6 +780,39 @@ export function AiProvidersOpenAIEditPage() {
         )}
         </Card>
       </SecondaryScreenShell>
+      <Modal
+        open={bulkKeysOpen}
+        onClose={() => setBulkKeysOpen(false)}
+        title={t('ai_providers.openai_keys_bulk_title')}
+        width={640}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setBulkKeysOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={addBulkEntries}
+              disabled={saving || disableControls || isTestingKeys || bulkKeysText.trim().length === 0}
+            >
+              {t('ai_providers.openai_keys_bulk_apply')}
+            </Button>
+          </>
+        }
+      >
+        <div className={styles.bulkKeysModalBody}>
+          <textarea
+            className={`input ${styles.bulkKeysTextarea}`}
+            value={bulkKeysText}
+            onChange={(event) => setBulkKeysText(event.target.value)}
+            placeholder={t('ai_providers.openai_keys_bulk_placeholder')}
+            rows={8}
+            disabled={saving || disableControls || isTestingKeys}
+            autoFocus
+          />
+          <div className={styles.sectionHint}>{t('ai_providers.openai_keys_bulk_hint')}</div>
+        </div>
+      </Modal>
       <Modal
         open={activeTestDetailIndex !== null && Boolean(activeTestDetail)}
         onClose={() => setActiveTestDetailIndex(null)}
