@@ -35,6 +35,7 @@ export type OpenAIEditOutletContext = {
   setTestMessage: Dispatch<SetStateAction<string>>;
   keyTestStatuses: KeyTestStatus[];
   setDraftKeyTestStatus: (keyIndex: number, status: KeyTestStatus) => void;
+  removeDraftKeyTestStatus: (keyIndex: number) => void;
   resetDraftKeyTestStatuses: (count: number) => void;
   availableModels: string[];
   handleBack: () => void;
@@ -170,6 +171,7 @@ export function AiProvidersOpenAIEditLayout() {
   const setDraftTestStatus = useOpenAIEditDraftStore((state) => state.setDraftTestStatus);
   const setDraftTestMessage = useOpenAIEditDraftStore((state) => state.setDraftTestMessage);
   const setDraftKeyTestStatus = useOpenAIEditDraftStore((state) => state.setDraftKeyTestStatus);
+  const removeDraftKeyTestStatus = useOpenAIEditDraftStore((state) => state.removeDraftKeyTestStatus);
   const resetDraftKeyTestStatuses = useOpenAIEditDraftStore((state) => state.resetDraftKeyTestStatuses);
 
   const form = draft?.form ?? buildEmptyForm();
@@ -219,6 +221,13 @@ export function AiProvidersOpenAIEditLayout() {
       resetDraftKeyTestStatuses(draftKey, count);
     },
     [draftKey, resetDraftKeyTestStatuses]
+  );
+
+  const handleRemoveDraftKeyTestStatus = useCallback(
+    (keyIndex: number) => {
+      removeDraftKeyTestStatus(draftKey, keyIndex);
+    },
+    [draftKey, removeDraftKeyTestStatus]
   );
 
   const initialData = useMemo(() => {
@@ -546,6 +555,7 @@ export function AiProvidersOpenAIEditLayout() {
         setTestMessage,
         keyTestStatuses,
         setDraftKeyTestStatus: handleSetDraftKeyTestStatus,
+        removeDraftKeyTestStatus: handleRemoveDraftKeyTestStatus,
         resetDraftKeyTestStatuses: handleResetDraftKeyTestStatuses,
         availableModels,
         handleBack,
