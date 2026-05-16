@@ -60,6 +60,7 @@ interface OpenAIEditDraftState {
   setDraftTestStatus: (key: string, action: SetStateAction<OpenAITestStatus>) => void;
   setDraftTestMessage: (key: string, action: SetStateAction<string>) => void;
   setDraftKeyTestStatus: (draftKey: string, keyIndex: number, status: KeyTestStatus) => void;
+  removeDraftKeyTestStatus: (draftKey: string, keyIndex: number) => void;
   resetDraftKeyTestStatuses: (draftKey: string, count: number) => void;
   clearDraft: (key: string) => void;
 }
@@ -215,6 +216,20 @@ export const useOpenAIEditDraftStore = create<OpenAIEditDraftState>((set, get) =
       const existing = state.drafts[draftKey] ?? buildEmptyDraft();
       const nextStatuses = [...existing.keyTestStatuses];
       nextStatuses[keyIndex] = status;
+      return {
+        drafts: {
+          ...state.drafts,
+          [draftKey]: { ...existing, initialized: true, keyTestStatuses: nextStatuses },
+        },
+      };
+    });
+  },
+
+  removeDraftKeyTestStatus: (draftKey, keyIndex) => {
+    if (!draftKey) return;
+    set((state) => {
+      const existing = state.drafts[draftKey] ?? buildEmptyDraft();
+      const nextStatuses = existing.keyTestStatuses.filter((_, index) => index !== keyIndex);
       return {
         drafts: {
           ...state.drafts,
