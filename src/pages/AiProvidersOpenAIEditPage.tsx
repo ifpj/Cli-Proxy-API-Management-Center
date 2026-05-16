@@ -132,6 +132,7 @@ export function AiProvidersOpenAIEditPage() {
     setTestMessage,
     keyTestStatuses,
     setDraftKeyTestStatus,
+    removeDraftKeyTestStatus,
     resetDraftKeyTestStatuses,
     availableModels,
     handleBack,
@@ -416,14 +417,18 @@ export function AiProvidersOpenAIEditPage() {
 
     const removeEntry = (idx: number) => {
       const next = list.filter((_, i) => i !== idx);
-      const nextLength = next.length ? next.length : 1;
       setForm((prev) => ({
         ...prev,
         apiKeyEntries: next.length ? next : [buildApiKeyEntry()],
       }));
-      resetDraftKeyTestStatuses(nextLength);
+      removeDraftKeyTestStatus(idx);
       setTestStatus('idle');
       setTestMessage('');
+      if (activeTestDetailIndex === idx) {
+        setActiveTestDetailIndex(null);
+      } else if (activeTestDetailIndex !== null && activeTestDetailIndex > idx) {
+        setActiveTestDetailIndex(activeTestDetailIndex - 1);
+      }
     };
 
     return (
