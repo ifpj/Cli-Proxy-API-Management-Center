@@ -460,6 +460,7 @@
     "openai_model_alias_placeholder": "Model alias (optional)",
     "openai_models_add_btn": "Add Model",
     "openai_models_clear_btn": "Clear Models",
+    "openai_models_drag_handle": "Drag to reorder models",
     "openai_models_fetch_button": "Fetch via /models",
     "openai_models_fetch_title": "Pick Models from /models",
     "openai_models_fetch_hint": "Call the /models endpoint using the Base URL above, sending the first API key as Bearer plus custom headers.",
