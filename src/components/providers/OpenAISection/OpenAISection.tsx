@@ -690,37 +690,87 @@ export function OpenAISection({
           )}
           {apiKeyEntries.length > 0 && (
             <div className={styles.apiKeyEntriesSection}>
-              <button
-                type="button"
-                className={styles.apiKeyEntriesSummary}
-                onClick={() => setKeyModalProvider({ config: provider, originalIndex })}
-              >
-                <span className={styles.apiKeyEntriesLabel}>
-                  {t('ai_providers.openai_keys_count')}: {apiKeyEntries.length}
-                </span>
-                <span className={styles.apiKeyEntriesSummaryAction}>
-                  {t('ai_providers.openai_keys_view_action')}
-                  <IconEye size={14} />
-                </span>
-              </button>
+              {apiKeyEntries.length === 1 ? (
+                (() => {
+                  const entry = apiKeyEntries[0];
+                  const entryStats = getProviderTotalStats(
+                    usageByProvider,
+                    provider.name,
+                    entry.apiKey,
+                    provider.baseUrl
+                  );
+                  const shouldWarnKey = entryStats.success === 0 && entryStats.failure >= 3;
+                  return (
+                    <div
+                      className={`${styles.apiKeyEntryCard} ${
+                        shouldWarnKey ? styles.apiKeyEntryCardWarning : ''
+                      }`}
+                    >
+                      <span className={styles.apiKeyEntryIndex}>1</span>
+                      <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
+                      {entry.proxyUrl && (
+                        <span className={styles.apiKeyEntryProxy}>{entry.proxyUrl}</span>
+                      )}
+                      <div className={styles.apiKeyEntryStats}>
+                        <span
+                          className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
+                        >
+                          <IconCheck size={12} /> {entryStats.success}
+                        </span>
+                        <span
+                          className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
+                        >
+                          <IconX size={12} /> {entryStats.failure}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <button
+                  type="button"
+                  className={styles.apiKeyEntriesSummary}
+                  onClick={() => setKeyModalProvider({ config: provider, originalIndex })}
+                >
+                  <span className={styles.apiKeyEntriesLabel}>
+                    {t('ai_providers.openai_keys_count')}: {apiKeyEntries.length}
+                  </span>
+                  <span className={styles.apiKeyEntriesSummaryAction}>
+                    {t('ai_providers.openai_keys_view_action')}
+                    <IconEye size={14} />
+                  </span>
+                </button>
+              )}
             </div>
           )}
           {provider.models?.length ? (
-            <div className={styles.modelEntriesSection}>
-              <button
-                type="button"
-                className={styles.modelEntriesSummary}
-                onClick={() => setModelModalProvider({ config: provider, originalIndex })}
-              >
-                <span className={styles.modelEntriesLabel}>
-                  {t('ai_providers.openai_models_count')}: {provider.models.length}
+            provider.models.length === 1 ? (
+              <div className={styles.modelTagList}>
+                <span className={styles.modelTag}>
+                  <span className={styles.modelName}>{provider.models[0].name}</span>
+                  {provider.models[0].alias &&
+                    provider.models[0].alias !== provider.models[0].name && (
+                      <span className={styles.modelAlias}>{provider.models[0].alias}</span>
+                    )}
                 </span>
-                <span className={styles.modelEntriesSummaryAction}>
-                  {t('ai_providers.openai_models_view_action')}
-                  <IconEye size={14} />
-                </span>
-              </button>
-            </div>
+              </div>
+            ) : (
+              <div className={styles.modelEntriesSection}>
+                <button
+                  type="button"
+                  className={styles.modelEntriesSummary}
+                  onClick={() => setModelModalProvider({ config: provider, originalIndex })}
+                >
+                  <span className={styles.modelEntriesLabel}>
+                    {t('ai_providers.openai_models_count')}: {provider.models.length}
+                  </span>
+                  <span className={styles.modelEntriesSummaryAction}>
+                    {t('ai_providers.openai_models_view_action')}
+                    <IconEye size={14} />
+                  </span>
+                </button>
+              </div>
+            )
           ) : (
             <div className={styles.fieldRow} style={{ marginTop: '8px' }}>
               <span className={styles.fieldLabel}>{t('ai_providers.openai_models_count')}:</span>
