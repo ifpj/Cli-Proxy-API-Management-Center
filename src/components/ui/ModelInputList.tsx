@@ -1,6 +1,6 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Button } from './Button';
-import { IconX } from './icons';
+import { IconGripVertical, IconX } from './icons';
 import type { ModelEntry } from './modelInputListUtils';
 
 interface ModelInputListProps {
@@ -18,6 +18,12 @@ interface ModelInputListProps {
   removeButtonClassName?: string;
   removeButtonTitle?: string;
   removeButtonAriaLabel?: string;
+  enableReorder?: boolean;
+  dragHandleClassName?: string;
+  draggingRowClassName?: string;
+  dragOverRowClassName?: string;
+  reorderButtonTitle?: string;
+  reorderButtonAriaLabel?: string;
 }
 
 export function ModelInputList({
@@ -35,14 +41,34 @@ export function ModelInputList({
   removeButtonClassName = '',
   removeButtonTitle = 'Remove',
   removeButtonAriaLabel = 'Remove',
+  enableReorder = false,
+  dragHandleClassName = '',
+  draggingRowClassName = '',
+  dragOverRowClassName = '',
+  reorderButtonTitle = 'Drag to reorder',
+  reorderButtonAriaLabel = 'Drag to reorder',
 }: ModelInputListProps) {
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const currentEntries = entries.length ? entries : [{ name: '', alias: '' }];
   const containerClassName = ['header-input-list', className].filter(Boolean).join(' ');
   const inputClassNames = ['input', inputClassName].filter(Boolean).join(' ');
-  const rowClassNames = ['header-input-row', rowClassName].filter(Boolean).join(' ');
+  const canReorder = enableReorder && !disabled && currentEntries.length > 1;
+
+  const getRowClassNames = (index: number) =>
+    [
+      'header-input-row',
+      rowClassName,
+      draggedIndex === index ? draggingRowClassName : '',
+      dragOverIndex === index && draggedIndex !== index ? dragOverRowClassName : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
   const updateEntry = (index: number, field: 'name' | 'alias', value: string) => {
-    const next = currentEntries.map((entry, idx) => (idx === index ? { ...entry, [field]: value } : entry));
+    const next = currentEntries.map((entry, idx) =>
+      idx === index ? { ...entry, [field]: value } : entry
+    );
     onChange(next);
   };
 
@@ -59,11 +85,59 @@ export function ModelInputList({
     onChange(next.length ? next : [{ name: '', alias: '' }]);
   };
 
+  const finishDrag = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const moveEntry = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const next = [...currentEntries];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    onChange(next);
+  };
+
   return (
     <div className={containerClassName}>
       {currentEntries.map((entry, index) => (
         <Fragment key={index}>
-          <div className={rowClassNames}>
+          <div
+            className={getRowClassNames(index)}
+            onDragOver={(event) => {
+              if (!canReorder || draggedIndex === null) return;
+              event.preventDefault();
+              setDragOverIndex(index);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (!canReorder || draggedIndex === null) {
+                finishDrag();
+                return;
+              }
+              moveEntry(draggedIndex, index);
+              finishDrag();
+            }}
+          >
+            {enableReorder && (
+              <button
+                type="button"
+                className={dragHandleClassName}
+                draggable={canReorder}
+                disabled={!canReorder}
+                title={reorderButtonTitle}
+                aria-label={reorderButtonAriaLabel}
+                onDragStart={(event) => {
+                  if (!canReorder) return;
+                  setDraggedIndex(index);
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', String(index));
+                }}
+                onDragEnd={finishDrag}
+              >
+                <IconGripVertical size={16} />
+              </button>
+            )}
             <input
               className={inputClassNames}
               placeholder={namePlaceholder}
@@ -94,7 +168,13 @@ export function ModelInputList({
         </Fragment>
       ))}
       {!hideAddButton && addLabel && (
-        <Button variant="secondary" size="sm" onClick={addEntry} disabled={disabled} className="align-start">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={addEntry}
+          disabled={disabled}
+          className="align-start"
+        >
           {addLabel}
         </Button>
       )}

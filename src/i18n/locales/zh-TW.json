@@ -419,6 +419,7 @@
     "openai_model_alias_placeholder": "模型別名（選填）",
     "openai_models_add_btn": "新增模型",
     "openai_models_clear_btn": "清空模型",
+    "openai_models_drag_handle": "拖曳調整模型順序",
     "openai_models_fetch_button": "從 /models 取得",
     "openai_models_fetch_title": "從 /models 選擇模型",
     "openai_models_fetch_hint": "使用上方 Base URL 呼叫 /models 端點，附帶第一個 API Key（Bearer）與自訂請求標頭。",

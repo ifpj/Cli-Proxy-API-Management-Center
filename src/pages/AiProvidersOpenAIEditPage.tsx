@@ -762,10 +762,16 @@ export function AiProvidersOpenAIEditPage() {
                   namePlaceholder={t('common.model_name_placeholder')}
                   aliasPlaceholder={t('common.model_alias_placeholder')}
                   disabled={saving || disableControls || isTestingKeys}
+                  enableReorder
                   hideAddButton
                   className={styles.modelInputList}
-                  rowClassName={styles.modelInputRow}
+                  rowClassName={`${styles.modelInputRow} ${styles.modelInputRowDraggable}`}
                   inputClassName={styles.modelInputField}
+                  dragHandleClassName={styles.modelDragHandle}
+                  draggingRowClassName={styles.modelInputRowDragging}
+                  dragOverRowClassName={styles.modelInputRowDragOver}
+                  reorderButtonTitle={t('ai_providers.openai_models_drag_handle')}
+                  reorderButtonAriaLabel={t('ai_providers.openai_models_drag_handle')}
                   removeButtonClassName={styles.modelRowRemoveButton}
                   removeButtonTitle={t('common.delete')}
                   removeButtonAriaLabel={t('common.delete')}
