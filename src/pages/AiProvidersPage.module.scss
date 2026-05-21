@@ -1257,8 +1257,74 @@ $openai-toolbar-control-height: 36px;
   }
 }
 
+.modelInputRow.modelInputRowDraggable {
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+
+  @include mobile {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+
+    > :nth-child(2) {
+      display: block;
+    }
+
+    > :nth-child(3) {
+      display: none;
+    }
+
+    > :nth-child(4) {
+      grid-column: 2 / 4;
+    }
+
+    > :nth-child(5) {
+      grid-column: 3 / 4;
+      grid-row: 1 / 2;
+    }
+  }
+}
+
+.modelInputRowDragging {
+  opacity: 0.5;
+}
+
+.modelInputRowDragOver {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 46%, transparent);
+  outline-offset: 2px;
+  border-radius: $radius-md;
+}
+
 .modelInputField {
   min-width: 0;
+}
+
+.modelDragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: grab;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
 }
 
 .modelRowRemoveButton {
