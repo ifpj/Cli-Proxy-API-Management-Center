@@ -432,6 +432,7 @@
     "sort_asc_short": "升序",
     "sort_by_priority": "按优先级排序",
     "sort_by_recent_success": "按最近成功数排序",
+    "sort_by_total_success": "按总成功数排序",
     "sort_descending": "降序排序",
     "sort_desc_short": "降序",
     "openai_test_model": "测试模型",
