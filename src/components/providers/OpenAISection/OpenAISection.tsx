@@ -856,10 +856,13 @@ export function OpenAISection({
                   entry.apiKey,
                   keyModalProvider.config.baseUrl
                 );
+                const shouldWarnKey = entryStats.success === 0 && entryStats.failure >= 3;
                 return (
                   <div
                     key={getApiKeyEntryRenderKey(entry, entryIndex)}
-                    className={styles.apiKeyEntryCard}
+                    className={`${styles.apiKeyEntryCard} ${
+                      shouldWarnKey ? styles.apiKeyEntryCardWarning : ''
+                    }`}
                   >
                     <span className={styles.apiKeyEntryIndex}>{entryIndex + 1}</span>
                     <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
