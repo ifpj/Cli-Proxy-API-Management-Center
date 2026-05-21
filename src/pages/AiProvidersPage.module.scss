@@ -725,6 +725,19 @@ $openai-toolbar-control-height: 36px;
   font-size: 12px;
 }
 
+.apiKeyEntryCardWarning {
+  background: var(--failure-badge-bg);
+  border-color: var(--failure-badge-border);
+
+  .apiKeyEntryIndex {
+    background: var(--failure-badge-text);
+  }
+
+  .apiKeyEntryKey {
+    color: var(--failure-badge-text);
+  }
+}
+
 .apiKeyEntriesSummary {
   display: flex;
   align-items: center;
