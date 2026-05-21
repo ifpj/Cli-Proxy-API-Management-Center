@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Modal } from '@/components/ui/Modal';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
@@ -11,6 +12,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconChevronUp,
+  IconEye,
   IconSlidersHorizontal,
   IconX,
 } from '@/components/ui/icons';
@@ -109,6 +111,8 @@ export function OpenAISection({
   const [sortOption, setSortOption] = useState<SortOption>('config-order');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [keyModalProvider, setKeyModalProvider] = useState<IndexedOpenAIProvider | null>(null);
+  const [modelModalProvider, setModelModalProvider] = useState<IndexedOpenAIProvider | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownLayout, setDropdownLayout] = useState({ openAbove: false, maxHeight: 300 });
   const [floatingToolbarStyle, setFloatingToolbarStyle] = useState<FloatingToolbarStyle>({
@@ -591,8 +595,12 @@ export function OpenAISection({
                     if (!hasSuccessDetails) return;
                     onOpenTestResult(originalIndex, 'success');
                   }}
-                  title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
-                  aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                  title={t('ai_providers.openai_test_response_toggle', {
+                    defaultValue: 'View test response',
+                  })}
+                  aria-label={t('ai_providers.openai_test_response_toggle', {
+                    defaultValue: 'View test response',
+                  })}
                 >
                   {testResult.successMessage}
                 </button>
@@ -606,8 +614,12 @@ export function OpenAISection({
                     if (!hasFailureDetails) return;
                     onOpenTestResult(originalIndex, 'failure');
                   }}
-                  title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
-                  aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                  title={t('ai_providers.openai_test_response_toggle', {
+                    defaultValue: 'View test response',
+                  })}
+                  aria-label={t('ai_providers.openai_test_response_toggle', {
+                    defaultValue: 'View test response',
+                  })}
                 >
                   {testResult.failureMessage}
                 </button>
@@ -627,8 +639,12 @@ export function OpenAISection({
                     if (!hasSummaryDetails) return;
                     onOpenTestResult(originalIndex);
                   }}
-                  title={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
-                  aria-label={t('ai_providers.openai_test_response_toggle', { defaultValue: 'View test response' })}
+                  title={t('ai_providers.openai_test_response_toggle', {
+                    defaultValue: 'View test response',
+                  })}
+                  aria-label={t('ai_providers.openai_test_response_toggle', {
+                    defaultValue: 'View test response',
+                  })}
                 >
                   {testResult.message}
                 </button>
@@ -667,61 +683,43 @@ export function OpenAISection({
           )}
           {apiKeyEntries.length > 0 && (
             <div className={styles.apiKeyEntriesSection}>
-              <div className={styles.apiKeyEntriesLabel}>
-                {t('ai_providers.openai_keys_count')}: {apiKeyEntries.length}
-              </div>
-              <div className={styles.apiKeyEntryList}>
-                {apiKeyEntries.map((entry, entryIndex) => {
-                  const entryStats = getProviderTotalStats(
-                    usageByProvider,
-                    provider.name,
-                    entry.apiKey,
-                    provider.baseUrl
-                  );
-                  return (
-                    <div
-                      key={getApiKeyEntryRenderKey(entry, entryIndex)}
-                      className={styles.apiKeyEntryCard}
-                    >
-                      <span className={styles.apiKeyEntryIndex}>{entryIndex + 1}</span>
-                      <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
-                      {entry.proxyUrl && (
-                        <span className={styles.apiKeyEntryProxy}>{entry.proxyUrl}</span>
-                      )}
-                      <div className={styles.apiKeyEntryStats}>
-                        <span
-                          className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
-                        >
-                          <IconCheck size={12} /> {entryStats.success}
-                        </span>
-                        <span
-                          className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
-                        >
-                          <IconX size={12} /> {entryStats.failure}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <button
+                type="button"
+                className={styles.apiKeyEntriesSummary}
+                onClick={() => setKeyModalProvider({ config: provider, originalIndex })}
+              >
+                <span className={styles.apiKeyEntriesLabel}>
+                  {t('ai_providers.openai_keys_count')}: {apiKeyEntries.length}
+                </span>
+                <span className={styles.apiKeyEntriesSummaryAction}>
+                  {t('ai_providers.openai_keys_view_action')}
+                  <IconEye size={14} />
+                </span>
+              </button>
             </div>
           )}
-          <div className={styles.fieldRow} style={{ marginTop: '8px' }}>
-            <span className={styles.fieldLabel}>{t('ai_providers.openai_models_count')}:</span>
-            <span className={styles.fieldValue}>{provider.models?.length || 0}</span>
-          </div>
           {provider.models?.length ? (
-            <div className={styles.modelTagList}>
-              {provider.models.map((model) => (
-                <span key={model.name} className={styles.modelTag}>
-                  <span className={styles.modelName}>{model.name}</span>
-                  {model.alias && model.alias !== model.name && (
-                    <span className={styles.modelAlias}>{model.alias}</span>
-                  )}
+            <div className={styles.modelEntriesSection}>
+              <button
+                type="button"
+                className={styles.modelEntriesSummary}
+                onClick={() => setModelModalProvider({ config: provider, originalIndex })}
+              >
+                <span className={styles.modelEntriesLabel}>
+                  {t('ai_providers.openai_models_count')}: {provider.models.length}
                 </span>
-              ))}
+                <span className={styles.modelEntriesSummaryAction}>
+                  {t('ai_providers.openai_models_view_action')}
+                  <IconEye size={14} />
+                </span>
+              </button>
             </div>
-          ) : null}
+          ) : (
+            <div className={styles.fieldRow} style={{ marginTop: '8px' }}>
+              <span className={styles.fieldLabel}>{t('ai_providers.openai_models_count')}:</span>
+              <span className={styles.fieldValue}>0</span>
+            </div>
+          )}
           {provider.testModel && (
             <div className={styles.fieldRow}>
               <span className={styles.fieldLabel}>{t('ai_providers.openai_test_model')}:</span>
@@ -765,6 +763,9 @@ export function OpenAISection({
       </div>
     );
   };
+
+  const keyModalEntries = keyModalProvider?.config.apiKeyEntries || [];
+  const modelModalEntries = modelModalProvider?.config.models || [];
 
   return (
     <>
@@ -825,6 +826,100 @@ export function OpenAISection({
             document.body
           )
         : null}
+      <Modal
+        open={keyModalProvider !== null}
+        title={
+          keyModalProvider
+            ? t('ai_providers.openai_keys_modal_title', {
+                name: keyModalProvider.config.name,
+              })
+            : undefined
+        }
+        width={680}
+        onClose={() => setKeyModalProvider(null)}
+        footer={
+          <Button variant="secondary" onClick={() => setKeyModalProvider(null)}>
+            {t('common.close')}
+          </Button>
+        }
+      >
+        {keyModalProvider && (
+          <div className={styles.apiKeyEntriesModalBody}>
+            <div className={styles.apiKeyEntriesModalMeta}>
+              {t('ai_providers.openai_keys_count')}: {keyModalEntries.length}
+            </div>
+            <div className={styles.apiKeyEntryList}>
+              {keyModalEntries.map((entry, entryIndex) => {
+                const entryStats = getProviderTotalStats(
+                  usageByProvider,
+                  keyModalProvider.config.name,
+                  entry.apiKey,
+                  keyModalProvider.config.baseUrl
+                );
+                return (
+                  <div
+                    key={getApiKeyEntryRenderKey(entry, entryIndex)}
+                    className={styles.apiKeyEntryCard}
+                  >
+                    <span className={styles.apiKeyEntryIndex}>{entryIndex + 1}</span>
+                    <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
+                    {entry.proxyUrl && (
+                      <span className={styles.apiKeyEntryProxy}>{entry.proxyUrl}</span>
+                    )}
+                    <div className={styles.apiKeyEntryStats}>
+                      <span
+                        className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
+                      >
+                        <IconCheck size={12} /> {entryStats.success}
+                      </span>
+                      <span
+                        className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
+                      >
+                        <IconX size={12} /> {entryStats.failure}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </Modal>
+      <Modal
+        open={modelModalProvider !== null}
+        title={
+          modelModalProvider
+            ? t('ai_providers.openai_models_modal_title', {
+                name: modelModalProvider.config.name,
+              })
+            : undefined
+        }
+        width={680}
+        onClose={() => setModelModalProvider(null)}
+        footer={
+          <Button variant="secondary" onClick={() => setModelModalProvider(null)}>
+            {t('common.close')}
+          </Button>
+        }
+      >
+        {modelModalProvider && (
+          <div className={styles.modelEntriesModalBody}>
+            <div className={styles.modelEntriesModalMeta}>
+              {t('ai_providers.openai_models_count')}: {modelModalEntries.length}
+            </div>
+            <div className={styles.modelTagList}>
+              {modelModalEntries.map((model) => (
+                <span key={model.name} className={styles.modelTag}>
+                  <span className={styles.modelName}>{model.name}</span>
+                  {model.alias && model.alias !== model.name && (
+                    <span className={styles.modelAlias}>{model.alias}</span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }
