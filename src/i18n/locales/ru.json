@@ -419,6 +419,7 @@
     "openai_model_name_placeholder": "Имя модели, например moonshotai/kimi-k2:free",
     "openai_model_alias_placeholder": "Псевдоним модели (необязательно)",
     "openai_models_add_btn": "Добавить модель",
+    "openai_models_clear_btn": "Очистить модели",
     "openai_models_fetch_button": "Получить через /models",
     "openai_models_fetch_title": "Выбор моделей из /models",
     "openai_models_fetch_hint": "Вызовите эндпоинт /models, используя указанный выше базовый URL, отправив первый API-ключ как Bearer с дополнительными заголовками.",
