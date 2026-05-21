@@ -87,6 +87,9 @@ const getApiKeyEntryRenderKey = (
   return authIndex ? `auth-index-${authIndex}` : `api-key-entry-${entryIndex}`;
 };
 
+const getModelFilterName = (model: NonNullable<OpenAIProviderConfig['models']>[number]) =>
+  (model.alias || model.name || '').trim();
+
 export function OpenAISection({
   configs,
   usageByProvider,
@@ -257,8 +260,9 @@ export function OpenAISection({
     const modelSet = new Set<string>();
     configs.forEach((provider) => {
       provider.models?.forEach((model) => {
-        if (model.name) {
-          modelSet.add(model.name);
+        const filterName = getModelFilterName(model);
+        if (filterName) {
+          modelSet.add(filterName);
         }
       });
     });
@@ -299,7 +303,7 @@ export function OpenAISection({
     const indexed = configs.map((config, originalIndex) => ({ config, originalIndex }));
     const filtered = indexed.filter(({ config }) => {
       if (selectedModels.size === 0) return true;
-      return config.models?.some((model) => selectedModels.has(model.name));
+      return config.models?.some((model) => selectedModels.has(getModelFilterName(model)));
     });
 
     const sorted = [...filtered];
