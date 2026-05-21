@@ -563,6 +563,68 @@ $openai-toolbar-control-height: 36px;
   flex-shrink: 0;
 }
 
+.modelEntriesSection {
+  margin-top: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.modelEntriesLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.modelEntriesSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color $transition-fast,
+    border-color $transition-fast;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--primary-color);
+    background: var(--bg-tertiary);
+    outline: none;
+  }
+}
+
+.modelEntriesSummaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary-color);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.modelEntriesModalBody {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  min-width: 0;
+}
+
+.modelEntriesModalMeta {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 // 单个模型标签
 .modelTag {
   display: inline-flex;
@@ -639,7 +701,6 @@ $openai-toolbar-control-height: 36px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 6px;
 }
 
 .apiKeyEntryList {
@@ -662,6 +723,56 @@ $openai-toolbar-control-height: 36px;
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   font-size: 12px;
+}
+
+.apiKeyEntriesSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color $transition-fast,
+    border-color $transition-fast;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--primary-color);
+    background: var(--bg-tertiary);
+    outline: none;
+  }
+}
+
+.apiKeyEntriesSummaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary-color);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.apiKeyEntriesModalBody {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  min-width: 0;
+}
+
+.apiKeyEntriesModalMeta {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .apiKeyEntryIndex {
