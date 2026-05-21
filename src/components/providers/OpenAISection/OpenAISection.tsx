@@ -25,15 +25,15 @@ import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderStatusBar } from '../ProviderStatusBar';
 import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer';
 import {
-  getOpenAIProviderRecentWindowStats,
   getOpenAIProviderRecentStatusData,
+  getOpenAIProviderRecentWindowStats,
   getOpenAIProviderTotalStats,
   getOpenAIProviderKey,
   getProviderTotalStats,
   type ProviderRecentUsageMap,
 } from '../utils';
 
-type SortOption = 'config-order' | 'name' | 'priority' | 'recent-success';
+type SortOption = 'config-order' | 'name' | 'priority' | 'recent-success' | 'total-success';
 type SortDirection = 'asc' | 'desc';
 
 interface FloatingToolbarStyle {
@@ -290,6 +290,7 @@ export function OpenAISection({
       { value: 'priority', label: t('ai_providers.sort_by_priority') },
       { value: 'name', label: t('ai_providers.sort_by_name') },
       { value: 'recent-success', label: t('ai_providers.sort_by_recent_success') },
+      { value: 'total-success', label: t('ai_providers.sort_by_total_success') },
     ],
     [t]
   );
@@ -304,11 +305,13 @@ export function OpenAISection({
     const sorted = [...filtered];
     const direction = sortDirection === 'desc' ? -1 : 1;
     const providerStats =
-      sortOption === 'recent-success'
+      sortOption === 'recent-success' || sortOption === 'total-success'
         ? new Map(
             sorted.map(({ config }) => [
               config,
-              getOpenAIProviderRecentWindowStats(config, usageByProvider),
+              sortOption === 'recent-success'
+                ? getOpenAIProviderRecentWindowStats(config, usageByProvider)
+                : getOpenAIProviderTotalStats(config, usageByProvider),
             ])
           )
         : null;
@@ -333,6 +336,7 @@ export function OpenAISection({
         });
         break;
       case 'recent-success':
+      case 'total-success':
         sorted.sort((a, b) => {
           const successDiff =
             (providerStats?.get(a.config)?.success ?? 0) -
@@ -370,6 +374,9 @@ export function OpenAISection({
 
   const handleSortOptionChange = (value: SortOption) => {
     setSortOption(value);
+    if (value === 'recent-success' || value === 'total-success') {
+      setSortDirection('desc');
+    }
   };
 
   const toggleSortDirection = () => {

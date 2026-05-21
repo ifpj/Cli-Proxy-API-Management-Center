@@ -400,6 +400,7 @@
     "sort_asc_short": "升冪",
     "sort_by_priority": "依優先順序排序",
     "sort_by_recent_success": "依最近成功排序",
+    "sort_by_total_success": "依總成功數排序",
     "sort_descending": "降冪排序",
     "sort_desc_short": "降冪",
     "openai_test_model": "測試模型",

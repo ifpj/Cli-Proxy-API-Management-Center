@@ -400,6 +400,7 @@
     "sort_asc_short": "Возр.",
     "sort_by_priority": "Сортировать по приоритету",
     "sort_by_recent_success": "Сортировать по недавним успехам",
+    "sort_by_total_success": "Сортировать по общим успехам",
     "sort_descending": "Сортировать по убыванию",
     "sort_desc_short": "Убыв.",
     "openai_test_model": "Тестовая модель",
