@@ -324,8 +324,8 @@ export function OpenAISection({
         break;
       case 'priority':
         sorted.sort((a, b) => {
-          const priorityA = a.config.priority ?? Number.MAX_SAFE_INTEGER;
-          const priorityB = b.config.priority ?? Number.MAX_SAFE_INTEGER;
+          const priorityA = a.config.priority ?? 0;
+          const priorityB = b.config.priority ?? 0;
           const priorityDiff = priorityA - priorityB;
 
           if (priorityDiff !== 0) {
