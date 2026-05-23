@@ -61,6 +61,40 @@ type ActiveProviderTestDetail = {
 
 type ProviderTabId = 'gemini' | 'codex' | 'claude' | 'vertex' | 'ampcode' | 'openai';
 
+type OpenAIPastePrefill = {
+  baseUrl: string;
+  apiKeys: string[];
+};
+
+const normalizeProviderBaseUrl = (value: string) => value.trim().replace(/\/+$/, '').toLowerCase();
+
+const parseOpenAIProviderPaste = (text: string): OpenAIPastePrefill | null => {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const [baseUrl, ...apiKeys] = lines;
+  if (!baseUrl || !/^https?:\/\//i.test(baseUrl) || apiKeys.length === 0) return null;
+  try {
+    const parsed = new URL(baseUrl);
+    if (!parsed.hostname) return null;
+  } catch {
+    return null;
+  }
+  return { baseUrl, apiKeys };
+};
+
+const isEditablePasteTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+};
+
+const getCurrentHashPath = () => {
+  const hash = window.location.hash.replace(/^#/, '');
+  return hash.split('?')[0] || '/';
+};
+
 export function AiProvidersPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -627,11 +661,39 @@ export function AiProvidersPage() {
   );
 
   const openEditor = useCallback(
-    (path: string) => {
-      navigate(path, { state: { fromAiProviders: true } });
+    (path: string, state?: Record<string, unknown>) => {
+      navigate(path, { state: { fromAiProviders: true, ...state } });
     },
     [navigate]
   );
+
+  useEffect(() => {
+    if (!isCurrentLayer || activeProviderTab !== 'openai') return;
+
+    const handlePaste = (event: ClipboardEvent) => {
+      if (getCurrentHashPath() !== '/ai-providers') return;
+      if (isEditablePasteTarget(event.target)) return;
+
+      const parsed = parseOpenAIProviderPaste(event.clipboardData?.getData('text') ?? '');
+      if (!parsed) return;
+
+      const pastedUrl = normalizeProviderBaseUrl(parsed.baseUrl);
+      const matchedIndex = openaiProviders.findIndex(
+        (provider) => normalizeProviderBaseUrl(provider.baseUrl) === pastedUrl
+      );
+
+      event.preventDefault();
+      if (matchedIndex >= 0) {
+        openEditor(`/ai-providers/openai/${matchedIndex}`, { openAIPastePrefill: parsed });
+        return;
+      }
+
+      openEditor('/ai-providers/openai/new', { openAIPastePrefill: parsed });
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [activeProviderTab, isCurrentLayer, openEditor, openaiProviders]);
 
   const deleteGemini = async (index: number) => {
     const entry = geminiKeys[index];

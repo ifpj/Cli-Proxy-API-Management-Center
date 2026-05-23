@@ -106,6 +106,18 @@ function StatusIcon({ status }: { status: KeyTestStatus['status'] }) {
   }
 }
 
+const parseBulkApiKeysText = (text: string) =>
+  text
+    .split(/[\s,;]+/g)
+    .map((key) => key.trim())
+    .filter((key) => key && !/^https?:\/\//i.test(key));
+
+const isEditablePasteTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+};
+
 export function AiProvidersOpenAIEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -621,6 +633,82 @@ export function AiProvidersOpenAIEditPage() {
       'success'
     );
   };
+
+  const appendPastedApiKeys = useCallback(
+    (parsedKeys: string[]) => {
+      if (parsedKeys.length === 0) return false;
+
+      const currentEntries = form.apiKeyEntries.length ? form.apiKeyEntries : [buildApiKeyEntry()];
+      const existingKeys = new Set(
+        currentEntries.map((entry) => entry.apiKey.trim()).filter(Boolean)
+      );
+      const nextKeys: string[] = [];
+
+      parsedKeys.forEach((key) => {
+        if (existingKeys.has(key)) return;
+        existingKeys.add(key);
+        nextKeys.push(key);
+      });
+
+      if (nextKeys.length === 0) {
+        showNotification(t('ai_providers.openai_keys_bulk_no_new'), 'warning');
+        return true;
+      }
+
+      const baseEntries = currentEntries.filter(
+        (entry) => entry.apiKey.trim() || entry.proxyUrl?.trim()
+      );
+      const next = [...baseEntries, ...nextKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))];
+      setForm((prev) => ({ ...prev, apiKeyEntries: next }));
+      resetDraftKeyTestStatuses(next.length);
+      setTestStatus('idle');
+      setTestMessage('');
+      setBulkKeysText('');
+      setBulkKeysOpen(false);
+      setActiveTestDetailIndex(null);
+      showNotification(
+        t('ai_providers.openai_keys_bulk_added', { count: nextKeys.length }),
+        'success'
+      );
+      return true;
+    },
+    [
+      form.apiKeyEntries,
+      resetDraftKeyTestStatuses,
+      setForm,
+      setTestMessage,
+      setTestStatus,
+      showNotification,
+      t,
+    ]
+  );
+
+  useEffect(() => {
+    if (loading || saving || disableControls || isTestingKeys || invalidIndexParam || invalidIndex) {
+      return;
+    }
+
+    const handlePaste = (event: ClipboardEvent) => {
+      if (isEditablePasteTarget(event.target)) return;
+
+      const parsedKeys = parseBulkApiKeysText(event.clipboardData?.getData('text') ?? '');
+      if (parsedKeys.length === 0) return;
+
+      event.preventDefault();
+      appendPastedApiKeys(parsedKeys);
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [
+    appendPastedApiKeys,
+    disableControls,
+    invalidIndex,
+    invalidIndexParam,
+    isTestingKeys,
+    loading,
+    saving,
+  ]);
 
   return (
     <>
