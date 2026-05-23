@@ -44,6 +44,8 @@ export type OpenAIEditOutletContext = {
   removeDraftKeyTestStatus: (keyIndex: number) => void;
   resetDraftKeyTestStatuses: (count: number) => void;
   availableModels: string[];
+  pendingImportedKeyScrollIndex: number | null;
+  consumeImportedKeyScrollIndex: () => void;
   handleBack: () => void;
   handleSave: () => Promise<void>;
   mergeDiscoveredModels: (selectedModels: ModelInfo[]) => void;
@@ -184,6 +186,9 @@ export function AiProvidersOpenAIEditLayout() {
     () => !isCacheValid('openai-compatibility')
   );
   const [saving, setSaving] = useState(false);
+  const [pendingImportedKeyScrollIndex, setPendingImportedKeyScrollIndex] = useState<
+    number | null
+  >(null);
 
   const draftKey = useMemo(() => {
     if (invalidIndexParam) return `openai:invalid:${params.index ?? 'unknown'}`;
@@ -361,6 +366,9 @@ export function AiProvidersOpenAIEditLayout() {
         keyTestStatuses: [],
       });
       if (pastePrefill?.apiKeys?.length) {
+        if (mergedKeys.addedCount > 0) {
+          setPendingImportedKeyScrollIndex(mergedKeys.entries.length - 1);
+        }
         showNotification(
           mergedKeys.addedCount > 0
             ? t('ai_providers.openai_keys_bulk_added', { count: mergedKeys.addedCount })
@@ -386,8 +394,15 @@ export function AiProvidersOpenAIEditLayout() {
         testMessage: '',
         keyTestStatuses: [],
       });
+      if (mergedKeys.addedCount > 0) {
+        setPendingImportedKeyScrollIndex(mergedKeys.entries.length - 1);
+      }
     }
   }, [draft?.initialized, draftKey, initDraft, initialData, loading, location.state]);
+
+  const consumeImportedKeyScrollIndex = useCallback(() => {
+    setPendingImportedKeyScrollIndex(null);
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -608,6 +623,8 @@ export function AiProvidersOpenAIEditLayout() {
         removeDraftKeyTestStatus: handleRemoveDraftKeyTestStatus,
         resetDraftKeyTestStatuses: handleResetDraftKeyTestStatuses,
         availableModels,
+        pendingImportedKeyScrollIndex,
+        consumeImportedKeyScrollIndex,
         handleBack,
         handleSave,
         mergeDiscoveredModels,
