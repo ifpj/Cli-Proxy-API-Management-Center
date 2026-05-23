@@ -215,15 +215,25 @@ export function AiProvidersClaudeEditLayout() {
       setLoading(true);
     }
 
-    fetchConfig('claude-api-key')
+    providersApi
+      .getClaudeConfigs()
       .then((value) => {
         if (cancelled) return;
-        setConfigs(Array.isArray(value) ? (value as ProviderKeyConfig[]) : []);
+        setConfigs(value || []);
+        updateConfigValue('claude-api-key', value || []);
+        clearCache('claude-api-key');
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         if (cancelled) return;
-        const message = getErrorMessage(err) || t('notification.refresh_failed');
-        showNotification(`${t('notification.load_failed')}: ${message}`, 'error');
+        try {
+          const fallback = await fetchConfig('claude-api-key');
+          if (cancelled) return;
+          setConfigs(Array.isArray(fallback) ? (fallback as ProviderKeyConfig[]) : []);
+        } catch {
+          if (cancelled) return;
+          const message = getErrorMessage(err) || t('notification.refresh_failed');
+          showNotification(`${t('notification.load_failed')}: ${message}`, 'error');
+        }
       })
       .finally(() => {
         if (cancelled) return;
@@ -233,7 +243,7 @@ export function AiProvidersClaudeEditLayout() {
     return () => {
       cancelled = true;
     };
-  }, [fetchConfig, isCacheValid, showNotification, t]);
+  }, [clearCache, fetchConfig, isCacheValid, showNotification, t, updateConfigValue]);
 
   useEffect(() => {
     if (loading) return;
@@ -423,8 +433,14 @@ export function AiProvidersClaudeEditLayout() {
           : [...configs, payload];
 
       await providersApi.saveClaudeConfigs(nextList);
-      setConfigs(nextList);
-      updateConfigValue('claude-api-key', nextList);
+      let syncedList = nextList;
+      try {
+        syncedList = await providersApi.getClaudeConfigs();
+      } catch {
+        // 保存已成功，刷新失败时使用本地计算结果兜底。
+      }
+      setConfigs(syncedList);
+      updateConfigValue('claude-api-key', syncedList);
       clearCache('claude-api-key');
       showNotification(
         editIndex !== null ? t('notification.claude_config_updated') : t('notification.claude_config_added'),

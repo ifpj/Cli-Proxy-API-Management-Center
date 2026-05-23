@@ -67,12 +67,14 @@ export function AiProvidersOpenAIModelsPage() {
       setError('');
       try {
         const headerObject = buildHeaderObject(form.headers);
-        const firstKey = form.apiKeyEntries.find((entry) => entry.apiKey?.trim())?.apiKey?.trim();
+        const firstKeyEntry = form.apiKeyEntries.find((entry) => entry.apiKey?.trim());
+        const firstKey = firstKeyEntry?.apiKey?.trim();
         const hasAuthHeader = hasHeader(headerObject, 'authorization');
         const list = await modelsApi.fetchModelsViaApiCall(
           trimmedBaseUrl,
           hasAuthHeader ? undefined : firstKey,
-          headerObject
+          headerObject,
+          firstKeyEntry?.authIndex
         );
         setModels(list);
       } catch (err: unknown) {

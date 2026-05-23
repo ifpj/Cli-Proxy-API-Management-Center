@@ -215,6 +215,7 @@ export function AiProvidersClaudeEditPage() {
     try {
       const result = await apiCallApi.request(
         {
+          authIndex: form.authIndex,
           method: 'POST',
           url: endpoint,
           header: headers,
