@@ -146,6 +146,7 @@ export function AiProvidersPage() {
   const isTestingGemini = testingProvider === 'gemini';
   const isTestingCodex = testingProvider === 'codex';
   const isTestingOpenAI = testingProvider === 'openai';
+  const loadedProviderTabsRef = useRef<Set<ProviderTabId>>(new Set());
 
   const pageTransitionLayer = usePageTransitionLayer();
   const isCurrentLayer = pageTransitionLayer ? pageTransitionLayer.status === 'current' : true;
@@ -182,28 +183,15 @@ export function AiProvidersPage() {
         ? codexTestResults[index]
         : openaiTestResults[index];
 
-  const loadConfigs = useCallback(async () => {
+  const loadInitialConfigs = useCallback(async () => {
     const hasValidCache = isCacheValid();
     if (!hasValidCache) {
       setLoading(true);
     }
     setError('');
     try {
-      const [
-        configResult,
-        geminiResult,
-        codexResult,
-        claudeResult,
-        vertexResult,
-        ampcodeResult,
-        openaiResult,
-      ] = await Promise.allSettled([
+      const [configResult, openaiResult] = await Promise.allSettled([
         fetchConfig(),
-        providersApi.getGeminiKeys(),
-        providersApi.getCodexConfigs(),
-        providersApi.getClaudeConfigs(),
-        providersApi.getVertexConfigs(),
-        ampcodeApi.getAmpcode(),
         providersApi.getOpenAIProviders(),
       ]);
 
@@ -218,39 +206,11 @@ export function AiProvidersPage() {
       setVertexConfigs(data?.vertexApiKeys || []);
       setOpenaiProviders(data?.openaiCompatibility || []);
 
-      if (geminiResult.status === 'fulfilled') {
-        setGeminiKeys(geminiResult.value || []);
-        updateConfigValue('gemini-api-key', geminiResult.value || []);
-        clearCache('gemini-api-key');
-      }
-
-      if (codexResult.status === 'fulfilled') {
-        setCodexConfigs(codexResult.value || []);
-        updateConfigValue('codex-api-key', codexResult.value || []);
-        clearCache('codex-api-key');
-      }
-
-      if (claudeResult.status === 'fulfilled') {
-        setClaudeConfigs(claudeResult.value || []);
-        updateConfigValue('claude-api-key', claudeResult.value || []);
-        clearCache('claude-api-key');
-      }
-
-      if (vertexResult.status === 'fulfilled') {
-        setVertexConfigs(vertexResult.value || []);
-        updateConfigValue('vertex-api-key', vertexResult.value || []);
-        clearCache('vertex-api-key');
-      }
-
-      if (ampcodeResult.status === 'fulfilled') {
-        updateConfigValue('ampcode', ampcodeResult.value);
-        clearCache('ampcode');
-      }
-
       if (openaiResult.status === 'fulfilled') {
         setOpenaiProviders(openaiResult.value || []);
         updateConfigValue('openai-compatibility', openaiResult.value || []);
         clearCache('openai-compatibility');
+        loadedProviderTabsRef.current.add('openai');
       }
     } catch (err: unknown) {
       const message = getErrorMessage(err) || t('notification.refresh_failed');
@@ -260,11 +220,79 @@ export function AiProvidersPage() {
     }
   }, [clearCache, fetchConfig, isCacheValid, t, updateConfigValue]);
 
+  const loadProviderTab = useCallback(
+    async (provider: ProviderTabId, options: { force?: boolean } = {}) => {
+      if (loadedProviderTabsRef.current.has(provider) && !options.force) return;
+
+      setLoading(true);
+      setError('');
+      try {
+        switch (provider) {
+          case 'gemini': {
+            const value = await providersApi.getGeminiKeys();
+            setGeminiKeys(value || []);
+            updateConfigValue('gemini-api-key', value || []);
+            clearCache('gemini-api-key');
+            break;
+          }
+          case 'codex': {
+            const value = await providersApi.getCodexConfigs();
+            setCodexConfigs(value || []);
+            updateConfigValue('codex-api-key', value || []);
+            clearCache('codex-api-key');
+            break;
+          }
+          case 'claude': {
+            const value = await providersApi.getClaudeConfigs();
+            setClaudeConfigs(value || []);
+            updateConfigValue('claude-api-key', value || []);
+            clearCache('claude-api-key');
+            break;
+          }
+          case 'vertex': {
+            const value = await providersApi.getVertexConfigs();
+            setVertexConfigs(value || []);
+            updateConfigValue('vertex-api-key', value || []);
+            clearCache('vertex-api-key');
+            break;
+          }
+          case 'ampcode': {
+            const value = await ampcodeApi.getAmpcode();
+            updateConfigValue('ampcode', value);
+            clearCache('ampcode');
+            break;
+          }
+          case 'openai': {
+            const value = await providersApi.getOpenAIProviders();
+            setOpenaiProviders(value || []);
+            updateConfigValue('openai-compatibility', value || []);
+            clearCache('openai-compatibility');
+            break;
+          }
+          default:
+            break;
+        }
+        loadedProviderTabsRef.current.add(provider);
+      } catch (err: unknown) {
+        const message = getErrorMessage(err) || t('notification.refresh_failed');
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [clearCache, t, updateConfigValue]
+  );
+
   useEffect(() => {
     if (hasMounted.current) return;
     hasMounted.current = true;
-    loadConfigs();
-  }, [loadConfigs]);
+    loadInitialConfigs();
+  }, [loadInitialConfigs]);
+
+  useEffect(() => {
+    if (!isCurrentLayer || !hasMounted.current || activeProviderTab === 'openai') return;
+    void loadProviderTab(activeProviderTab).catch(() => {});
+  }, [activeProviderTab, isCurrentLayer, loadProviderTab]);
 
   useEffect(() => {
     if (!isCurrentLayer) return;
