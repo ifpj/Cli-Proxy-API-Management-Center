@@ -11,7 +11,6 @@ import { classifyModels, type ModelInfo } from '@/utils/models';
 import styles from './ChatTestPage.module.scss';
 
 const CHAT_TEST_TIMEOUT_MS = 45_000;
-const MAX_TEXT_FILE_CHARS = 60_000;
 
 type ChatMessage = {
   role: 'user' | 'assistant';
@@ -40,7 +39,6 @@ type ChatFile = {
   type: string;
   size: number;
   content: string;
-  truncated: boolean;
 };
 
 const normalizeApiKeyList = (input: unknown): string[] => {
@@ -167,13 +165,11 @@ const readTextFile = (file: File): Promise<ChatFile> =>
     const reader = new FileReader();
     reader.onload = () => {
       const raw = typeof reader.result === 'string' ? reader.result : '';
-      const truncated = raw.length > MAX_TEXT_FILE_CHARS;
       resolve({
         name: file.name,
         type: file.type || 'text/plain',
         size: file.size,
-        content: truncated ? raw.slice(0, MAX_TEXT_FILE_CHARS) : raw,
-        truncated,
+        content: raw,
       });
     };
     reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
@@ -181,7 +177,7 @@ const readTextFile = (file: File): Promise<ChatFile> =>
   });
 
 const formatFileForPrompt = (file: ChatFile) =>
-  `<file name="${file.name}" type="${file.type}" size="${file.size}" truncated="${file.truncated}">\n${file.content}\n</file>`;
+  `<file name="${file.name}" type="${file.type}" size="${file.size}">\n${file.content}\n</file>`;
 
 const buildMessageText = (message: ChatMessage) => {
   const fileText = message.files?.length
@@ -584,7 +580,6 @@ export function ChatTestPage() {
                       {message.files.map((file, fileIndex) => (
                         <span key={`${file.name}-${fileIndex}`} className={styles.fileChip} title={file.name}>
                           {file.name}
-                          {file.truncated ? ` · ${t('chat_test.file_truncated', { defaultValue: '已截断' })}` : ''}
                         </span>
                       ))}
                     </div>
@@ -688,12 +683,7 @@ export function ChatTestPage() {
                 <div className={styles.filePreviewList}>
                   {selectedFiles.map((file, index) => (
                     <div key={`${file.name}-${index}`} className={styles.filePreview}>
-                      <span title={file.name}>
-                        {file.name}
-                        {file.truncated
-                          ? ` · ${t('chat_test.file_truncated', { defaultValue: '已截断' })}`
-                          : ''}
-                      </span>
+                      <span title={file.name}>{file.name}</span>
                       <button
                         type="button"
                         className={styles.removeFile}
