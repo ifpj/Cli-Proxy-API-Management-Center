@@ -35,6 +35,18 @@ const matchCategory = (text: string) => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
+const compareModelsByName = (a: ModelInfo, b: ModelInfo) => {
+  const nameCompare = a.name.localeCompare(b.name, undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
+  if (nameCompare !== 0) return nameCompare;
+  return (a.alias || '').localeCompare(b.alias || '', undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
+};
+
 export function normalizeModelList(payload: unknown, { dedupe = false } = {}): ModelInfo[] {
   const toModel = (entry: unknown, inheritedGroup?: string): ModelInfo | null => {
     if (typeof entry === 'string') {
@@ -166,5 +178,8 @@ export function classifyModels(models: ModelInfo[] = [], { otherLabel = 'Other' 
     populatedGroups.push(otherGroup);
   }
 
-  return populatedGroups;
+  return populatedGroups.map((group) => ({
+    ...group,
+    items: [...group.items].sort(compareModelsByName)
+  }));
 }
