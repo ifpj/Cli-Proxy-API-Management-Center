@@ -243,7 +243,6 @@ export function PageTransition({
       setIsAnimating(false);
 
       clearLayerStyles(currentLayerEl);
-      clearLayerStyles(exitingLayerEl);
     };
 
     if (transitionVariant === 'ios') {
