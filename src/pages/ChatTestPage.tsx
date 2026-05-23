@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { IconDownload, IconPlay, IconRefreshCw, IconTrash2, IconX } from '@/components/ui/icons';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { apiCallApi, getApiCallErrorMessage } from '@/services/api';
 import { apiKeysApi } from '@/services/api/apiKeys';
 import { useAuthStore, useConfigStore, useModelsStore, useNotificationStore } from '@/stores';
@@ -11,6 +12,7 @@ import { classifyModels, type ModelInfo } from '@/utils/models';
 import styles from './ChatTestPage.module.scss';
 
 const CHAT_TEST_TIMEOUT_MS = 45_000;
+const CHAT_TEST_SELECTED_MODEL_KEY = 'chat-test:selected-model';
 
 type ChatMessage = {
   role: 'user' | 'assistant';
@@ -211,7 +213,7 @@ export function ChatTestPage() {
   const modelsLoading = useModelsStore((state) => state.loading);
   const fetchModelsFromStore = useModelsStore((state) => state.fetchModels);
 
-  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedModel, setSelectedModel] = useLocalStorage(CHAT_TEST_SELECTED_MODEL_KEY, '');
   const [input, setInput] = useState('');
   const [selectedImages, setSelectedImages] = useState<ChatImage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<ChatFile[]>([]);
@@ -257,9 +259,10 @@ export function ChatTestPage() {
   }, [auth.apiBase, config?.apiKeys]);
 
   useEffect(() => {
-    if (selectedModel || modelOptions.length === 0) return;
+    if (modelOptions.length === 0) return;
+    if (selectedModel && modelOptions.some((model) => model.value === selectedModel)) return;
     setSelectedModel(modelOptions[0].value);
-  }, [modelOptions, selectedModel]);
+  }, [modelOptions, selectedModel, setSelectedModel]);
 
   useEffect(() => {
     const loadModels = async () => {
