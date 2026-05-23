@@ -96,6 +96,26 @@ const getApiKeyEntryRenderKey = (
 const getModelFilterName = (model: NonNullable<OpenAIProviderConfig['models']>[number]) =>
   (model.alias || model.name || '').trim();
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const matchesModelSearch = (modelName: string, search: string) => {
+  const normalizedName = modelName.toLowerCase();
+  const terms = search
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (terms.length === 0) return true;
+
+  return terms.every((term) => {
+    if (term === '*') return true;
+    if (!term.includes('*')) return normalizedName.includes(term);
+    const pattern = term.split('*').map(escapeRegExp).join('.*');
+    return new RegExp(pattern).test(normalizedName);
+  });
+};
+
 export function OpenAISection({
   configs,
   usageByProvider,
@@ -121,6 +141,7 @@ export function OpenAISection({
   const [sortOption, setSortOption] = useState<SortOption>('config-order');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [modelFilterSearch, setModelFilterSearch] = useState('');
   const [keyModalProvider, setKeyModalProvider] = useState<IndexedOpenAIProvider | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownLayout, setDropdownLayout] = useState({ openAbove: false, maxHeight: 300 });
@@ -134,6 +155,7 @@ export function OpenAISection({
   const topToolbarAnchorRef = useRef<HTMLDivElement>(null);
   const topDropdownRef = useRef<HTMLDivElement>(null);
   const floatingDropdownRef = useRef<HTMLDivElement>(null);
+  const modelSearchInputRef = useRef<HTMLInputElement>(null);
 
   const shouldRenderFloatingToolbar = false;
 
@@ -275,6 +297,10 @@ export function OpenAISection({
     return Array.from(modelSet).sort();
   }, [configs]);
   const selectedModelNames = useMemo(() => Array.from(selectedModels).sort(), [selectedModels]);
+  const filteredModelNames = useMemo(
+    () => allModelNames.filter((name) => matchesModelSearch(name, modelFilterSearch)),
+    [allModelNames, modelFilterSearch]
+  );
   const modelFilterActive = selectedModelNames.length > 0;
   const modelFilterLabel = modelFilterActive
     ? t('ai_providers.model_discovery_selected_count', { count: selectedModelNames.length })
@@ -382,6 +408,10 @@ export function OpenAISection({
     setSelectedModels(new Set());
   };
 
+  const selectFilteredModels = () => {
+    setSelectedModels(new Set(filteredModelNames));
+  };
+
   const handleSortOptionChange = (value: SortOption) => {
     setSortOption(value);
     if (value === 'recent-success' || value === 'total-success') {
@@ -394,6 +424,11 @@ export function OpenAISection({
   };
 
   const toggleDropdown = () => setIsDropdownOpen((prev) => !prev);
+
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+    requestAnimationFrame(() => modelSearchInputRef.current?.focus());
+  }, [isDropdownOpen]);
 
   const renderSortControls = () => (
     <div className={styles.sortControls}>
@@ -500,9 +535,9 @@ export function OpenAISection({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setSelectedModels(new Set(allModelNames))}
+                  onClick={selectFilteredModels}
                   className={styles.modelDropdownSelectAll}
-                  disabled={actionsDisabled || allModelNames.length === 0}
+                  disabled={actionsDisabled || filteredModelNames.length === 0}
                 >
                   {t('ai_providers.model_select_all')}
                 </Button>
@@ -518,17 +553,40 @@ export function OpenAISection({
                   </Button>
                 )}
               </div>
+              <div className={styles.modelDropdownSearch}>
+                <input
+                  ref={modelSearchInputRef}
+                  type="text"
+                  value={modelFilterSearch}
+                  onChange={(event) => setModelFilterSearch(event.target.value)}
+                  className={styles.modelDropdownSearchInput}
+                  placeholder={t('ai_providers.model_search_placeholder')}
+                  disabled={actionsDisabled}
+                />
+                {modelFilterSearch.trim() && (
+                  <button
+                    type="button"
+                    className={styles.modelDropdownSearchClear}
+                    onClick={() => setModelFilterSearch('')}
+                    disabled={actionsDisabled}
+                    aria-label={t('ai_providers.model_search_clear')}
+                    title={t('ai_providers.model_search_clear')}
+                  >
+                    <IconX size={14} />
+                  </button>
+                )}
+              </div>
               <div
                 className={styles.modelDropdownItems}
                 role="group"
                 aria-label={t('ai_providers.model_search_placeholder')}
               >
-                {allModelNames.length === 0 ? (
+                {filteredModelNames.length === 0 ? (
                   <div className={styles.modelDropdownEmpty}>
                     {t('ai_providers.model_filter_empty')}
                   </div>
                 ) : (
-                  allModelNames.map((name) => (
+                  filteredModelNames.map((name) => (
                     <SelectionCheckbox
                       key={`top-option-${name}`}
                       checked={selectedModels.has(name)}
