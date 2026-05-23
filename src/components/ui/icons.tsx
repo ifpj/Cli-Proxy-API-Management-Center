@@ -177,6 +177,23 @@ export function IconRefreshCw({ size = 20, ...props }: IconProps) {
   );
 }
 
+export function IconPlay({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <polygon points="6 3 20 12 6 21 6 3" />
+    </svg>
+  );
+}
+
+export function IconPencil({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <path d="M21.17 6.83a2.83 2.83 0 0 0-4-4L4 16v4h4Z" />
+      <path d="m15 5 4 4" />
+    </svg>
+  );
+}
+
 export function IconDownload({ size = 20, ...props }: IconProps) {
   return (
     <svg {...baseSvgProps} width={size} height={size} {...props}>
