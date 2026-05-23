@@ -19,6 +19,14 @@ type ChatMessage = {
   images?: ChatImage[];
   files?: ChatFile[];
   elapsedMs?: number;
+  stats?: ChatExchangeStats;
+};
+
+type ChatExchangeStats = {
+  requestChars: number;
+  requestBytes: number;
+  responseChars: number;
+  responseBytes: number;
 };
 
 type ChatImage = {
@@ -118,6 +126,18 @@ const modelLabel = (model: ModelInfo) => (model.alias ? `${model.name} (${model.
 const formatElapsed = (elapsedMs: number) =>
   elapsedMs < 1000 ? `${elapsedMs} ms` : `${(elapsedMs / 1000).toFixed(2)} s`;
 
+const countChars = (value: string) => Array.from(value).length;
+
+const countBytes = (value: string) => new TextEncoder().encode(value).length;
+
+const formatNumber = (value: number) => value.toLocaleString();
+
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${formatNumber(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+};
+
 const readImageFile = (file: File): Promise<ChatImage> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -204,6 +224,7 @@ export function ChatTestPage() {
   const [status, setStatus] = useState<{ type: 'success' | 'warning' | 'error' | 'muted'; text: string }>();
   const [rawResponse, setRawResponse] = useState('');
   const [lastElapsedMs, setLastElapsedMs] = useState<number | null>(null);
+  const [lastStats, setLastStats] = useState<ChatExchangeStats | null>(null);
   const [sending, setSending] = useState(false);
   const [resendingIndex, setResendingIndex] = useState<number | null>(null);
   const apiKeysCache = useRef<string[]>([]);
@@ -287,6 +308,7 @@ export function ChatTestPage() {
     setStatus({ type: 'muted', text: t('chat_test.sending', { defaultValue: '正在发送...' }) });
     setRawResponse('');
     setLastElapsedMs(null);
+    setLastStats(null);
 
     try {
       const apiKeys = await resolveApiKeys();
@@ -297,6 +319,19 @@ export function ChatTestPage() {
 
       setMessages(nextMessages);
 
+      const requestBody = JSON.stringify({
+        model,
+        messages: requestMessages.map((message) => ({
+          role: message.role,
+          content: toApiMessageContent(message),
+        })),
+        stream: false,
+      });
+      const requestStats = {
+        requestChars: countChars(requestBody),
+        requestBytes: countBytes(requestBody),
+      };
+
       const startedAt = performance.now();
       const result = await apiCallApi.request(
         {
@@ -306,14 +341,7 @@ export function ChatTestPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${primaryKey}`,
           },
-          data: JSON.stringify({
-            model,
-            messages: requestMessages.map((message) => ({
-              role: message.role,
-              content: toApiMessageContent(message),
-            })),
-            stream: false,
-          }),
+          data: requestBody,
         },
         { timeout: CHAT_TEST_TIMEOUT_MS }
       );
@@ -321,7 +349,13 @@ export function ChatTestPage() {
       setLastElapsedMs(elapsedMs);
 
       const formatted = formatRawBody(result.body, result.bodyText);
+      const stats: ChatExchangeStats = {
+        ...requestStats,
+        responseChars: countChars(formatted),
+        responseBytes: countBytes(formatted),
+      };
       setRawResponse(formatted);
+      setLastStats(stats);
 
       if (result.statusCode < 200 || result.statusCode >= 300) {
         const text = getApiCallErrorMessage(result);
@@ -331,7 +365,7 @@ export function ChatTestPage() {
       }
 
       const assistantText = extractAssistantText(result.body, result.bodyText);
-      setMessages([...nextMessages, { role: 'assistant', content: assistantText || formatted, elapsedMs }]);
+      setMessages([...nextMessages, { role: 'assistant', content: assistantText || formatted, elapsedMs, stats }]);
       setStatus({
         type: 'success',
         text: `${t('chat_test.success', { defaultValue: '对话测试成功' })} · ${formatElapsed(elapsedMs)}`,
@@ -394,6 +428,7 @@ export function ChatTestPage() {
     setSelectedFiles([]);
     setRawResponse('');
     setLastElapsedMs(null);
+    setLastStats(null);
     setStatus(undefined);
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
@@ -508,14 +543,28 @@ export function ChatTestPage() {
                         </span>
                       </button>
                     )}
-                    {message.role === 'assistant' && typeof message.elapsedMs === 'number' && (
-                      <span className={styles.messageMetric}>
-                        {t('chat_test.elapsed', {
-                          value: formatElapsed(message.elapsedMs),
-                          defaultValue: '耗时 {{value}}',
-                        })}
-                      </span>
-                    )}
+                    {message.role === 'assistant' &&
+                      (typeof message.elapsedMs === 'number' || message.stats) && (
+                        <span className={styles.messageMetric}>
+                          {[
+                            typeof message.elapsedMs === 'number'
+                              ? t('chat_test.elapsed', {
+                                  value: formatElapsed(message.elapsedMs),
+                                  defaultValue: '耗时 {{value}}',
+                                })
+                              : null,
+                            message.stats
+                              ? t('chat_test.message_response_stats', {
+                                  chars: formatNumber(message.stats.responseChars),
+                                  bytes: formatBytes(message.stats.responseBytes),
+                                  defaultValue: '响应 {{chars}} 字 / {{bytes}}',
+                                })
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      )}
                   </div>
                   {message.content && <div className={styles.bubble}>{message.content}</div>}
                   {message.images?.length ? (
@@ -736,6 +785,26 @@ export function ChatTestPage() {
                   value: formatElapsed(lastElapsedMs),
                   defaultValue: '最近响应耗时 {{value}}',
                 })}
+              </div>
+            )}
+            {lastStats && (
+              <div className={styles.statsGrid}>
+                <div className={styles.statItem}>
+                  <span>{t('chat_test.request_chars', { defaultValue: '请求字数' })}</span>
+                  <strong>{formatNumber(lastStats.requestChars)}</strong>
+                </div>
+                <div className={styles.statItem}>
+                  <span>{t('chat_test.request_size', { defaultValue: '请求大小' })}</span>
+                  <strong>{formatBytes(lastStats.requestBytes)}</strong>
+                </div>
+                <div className={styles.statItem}>
+                  <span>{t('chat_test.response_chars', { defaultValue: '响应字数' })}</span>
+                  <strong>{formatNumber(lastStats.responseChars)}</strong>
+                </div>
+                <div className={styles.statItem}>
+                  <span>{t('chat_test.response_size', { defaultValue: '响应大小' })}</span>
+                  <strong>{formatBytes(lastStats.responseBytes)}</strong>
+                </div>
               </div>
             )}
             {status && <div className={`status-badge ${status.type}`}>{status.text}</div>}
