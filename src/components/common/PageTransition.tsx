@@ -39,6 +39,12 @@ const clearLayerStyles = (element: HTMLElement | null) => {
   element.style.removeProperty('box-shadow');
 };
 
+const clearExitingLayerStyles = (element: HTMLElement | null) => {
+  if (!element) return;
+  element.style.visibility = 'hidden';
+  clearLayerStyles(element);
+};
+
 type Layer = {
   key: string;
   location: Location;
@@ -243,6 +249,7 @@ export function PageTransition({
       setIsAnimating(false);
 
       clearLayerStyles(currentLayerEl);
+      clearExitingLayerStyles(exitingLayerEl);
     };
 
     if (transitionVariant === 'ios') {
