@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconDownload, IconPlay, IconTrash2, IconX } from '@/components/ui/icons';
+import { IconDownload, IconPlay, IconRefreshCw, IconTrash2, IconX } from '@/components/ui/icons';
 import { apiCallApi, getApiCallErrorMessage } from '@/services/api';
 import { apiKeysApi } from '@/services/api/apiKeys';
 import { useAuthStore, useConfigStore, useModelsStore, useNotificationStore } from '@/stores';
@@ -11,17 +11,28 @@ import { classifyModels, type ModelInfo } from '@/utils/models';
 import styles from './ChatTestPage.module.scss';
 
 const CHAT_TEST_TIMEOUT_MS = 45_000;
+const MAX_TEXT_FILE_CHARS = 60_000;
 
 type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   images?: ChatImage[];
+  files?: ChatFile[];
+  elapsedMs?: number;
 };
 
 type ChatImage = {
   name: string;
   type: string;
   dataUrl: string;
+};
+
+type ChatFile = {
+  name: string;
+  type: string;
+  size: number;
+  content: string;
+  truncated: boolean;
 };
 
 const normalizeApiKeyList = (input: unknown): string[] => {
@@ -104,6 +115,9 @@ const formatRawBody = (body: unknown, bodyText: string): string => {
 
 const modelLabel = (model: ModelInfo) => (model.alias ? `${model.name} (${model.alias})` : model.name);
 
+const formatElapsed = (elapsedMs: number) =>
+  elapsedMs < 1000 ? `${elapsedMs} ms` : `${(elapsedMs / 1000).toFixed(2)} s`;
+
 const readImageFile = (file: File): Promise<ChatImage> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -123,13 +137,48 @@ const readImageFile = (file: File): Promise<ChatImage> =>
     reader.readAsDataURL(file);
   });
 
+const isTextFile = (file: File) => {
+  if (file.type.startsWith('text/')) return true;
+  return /\.(csv|json|log|md|txt|xml|yaml|yml)$/i.test(file.name);
+};
+
+const readTextFile = (file: File): Promise<ChatFile> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === 'string' ? reader.result : '';
+      const truncated = raw.length > MAX_TEXT_FILE_CHARS;
+      resolve({
+        name: file.name,
+        type: file.type || 'text/plain',
+        size: file.size,
+        content: truncated ? raw.slice(0, MAX_TEXT_FILE_CHARS) : raw,
+        truncated,
+      });
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+
+const formatFileForPrompt = (file: ChatFile) =>
+  `<file name="${file.name}" type="${file.type}" size="${file.size}" truncated="${file.truncated}">\n${file.content}\n</file>`;
+
+const buildMessageText = (message: ChatMessage) => {
+  const fileText = message.files?.length
+    ? `\n\n${message.files.map(formatFileForPrompt).join('\n\n')}`
+    : '';
+  return `${message.content}${fileText}`;
+};
+
 const toApiMessageContent = (message: ChatMessage) => {
+  const text = buildMessageText(message);
+
   if (message.role !== 'user' || !message.images?.length) {
-    return message.content;
+    return text;
   }
 
   return [
-    { type: 'text', text: message.content || 'Please analyze the attached image.' },
+    { type: 'text', text: text || 'Please analyze the attached image.' },
     ...message.images.map((image) => ({
       type: 'image_url',
       image_url: { url: image.dataUrl },
@@ -149,13 +198,17 @@ export function ChatTestPage() {
   const [selectedModel, setSelectedModel] = useState('');
   const [input, setInput] = useState('');
   const [selectedImages, setSelectedImages] = useState<ChatImage[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<ChatFile[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [includeHistory, setIncludeHistory] = useState(true);
   const [status, setStatus] = useState<{ type: 'success' | 'warning' | 'error' | 'muted'; text: string }>();
   const [rawResponse, setRawResponse] = useState('');
+  const [lastElapsedMs, setLastElapsedMs] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
+  const [resendingIndex, setResendingIndex] = useState<number | null>(null);
   const apiKeysCache = useRef<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const modelOptions = useMemo(
     () => models.map((model) => ({ value: model.name, label: modelLabel(model) })),
@@ -205,8 +258,7 @@ export function ChatTestPage() {
     void loadModels();
   }, [auth.apiBase, auth.connectionStatus, fetchModelsFromStore, models.length, resolveApiKeys]);
 
-  const handleSend = async () => {
-    const content = input.trim();
+  const sendMessages = async (nextMessages: ChatMessage[], requestMessages: ChatMessage[]) => {
     const model = selectedModel.trim();
 
     if (auth.connectionStatus !== 'connected' || !auth.apiBase) {
@@ -223,13 +275,6 @@ export function ChatTestPage() {
       return;
     }
 
-    if (!content && selectedImages.length === 0) {
-      const text = t('chat_test.message_required', { defaultValue: '请输入测试消息' });
-      setStatus({ type: 'warning', text });
-      showNotification(text, 'warning');
-      return;
-    }
-
     const endpoint = buildChatEndpoint(auth.apiBase);
     if (!endpoint) {
       const text = t('chat_test.endpoint_invalid', { defaultValue: '连接地址无效' });
@@ -241,6 +286,7 @@ export function ChatTestPage() {
     setSending(true);
     setStatus({ type: 'muted', text: t('chat_test.sending', { defaultValue: '正在发送...' }) });
     setRawResponse('');
+    setLastElapsedMs(null);
 
     try {
       const apiKeys = await resolveApiKeys();
@@ -249,20 +295,9 @@ export function ChatTestPage() {
         throw new Error(t('chat_test.api_key_required', { defaultValue: '未找到可用的代理 API Key' }));
       }
 
-      const userMessage: ChatMessage = {
-        role: 'user',
-        content,
-        images: selectedImages.length ? selectedImages : undefined,
-      };
-      const nextMessages: ChatMessage[] = [...messages, userMessage];
-      const requestMessages = includeHistory ? nextMessages : [userMessage];
       setMessages(nextMessages);
-      setInput('');
-      setSelectedImages([]);
-      if (imageInputRef.current) {
-        imageInputRef.current.value = '';
-      }
 
+      const startedAt = performance.now();
       const result = await apiCallApi.request(
         {
           method: 'POST',
@@ -282,6 +317,8 @@ export function ChatTestPage() {
         },
         { timeout: CHAT_TEST_TIMEOUT_MS }
       );
+      const elapsedMs = Math.max(0, Math.round(performance.now() - startedAt));
+      setLastElapsedMs(elapsedMs);
 
       const formatted = formatRawBody(result.body, result.bodyText);
       setRawResponse(formatted);
@@ -294,24 +331,75 @@ export function ChatTestPage() {
       }
 
       const assistantText = extractAssistantText(result.body, result.bodyText);
-      setMessages([...nextMessages, { role: 'assistant', content: assistantText || formatted }]);
-      setStatus({ type: 'success', text: t('chat_test.success', { defaultValue: '对话测试成功' }) });
+      setMessages([...nextMessages, { role: 'assistant', content: assistantText || formatted, elapsedMs }]);
+      setStatus({
+        type: 'success',
+        text: `${t('chat_test.success', { defaultValue: '对话测试成功' })} · ${formatElapsed(elapsedMs)}`,
+      });
     } catch (error: unknown) {
       const text = error instanceof Error ? error.message : String(error || '');
       setStatus({ type: 'error', text });
       showNotification(text, 'error');
     } finally {
       setSending(false);
+      setResendingIndex(null);
     }
+  };
+
+  const handleSend = async () => {
+    const content = input.trim();
+
+    if (!content && selectedImages.length === 0 && selectedFiles.length === 0) {
+      const text = t('chat_test.message_required', { defaultValue: '请输入测试消息' });
+      setStatus({ type: 'warning', text });
+      showNotification(text, 'warning');
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content,
+      images: selectedImages.length ? selectedImages : undefined,
+      files: selectedFiles.length ? selectedFiles : undefined,
+    };
+    const nextMessages: ChatMessage[] = [...messages, userMessage];
+    const requestMessages = includeHistory ? nextMessages : [userMessage];
+
+    setInput('');
+    setSelectedImages([]);
+    setSelectedFiles([]);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
+    await sendMessages(nextMessages, requestMessages);
+  };
+
+  const handleResend = async (index: number) => {
+    const message = messages[index];
+    if (!message || message.role !== 'user') return;
+
+    const nextMessages = messages.slice(0, index + 1);
+    const requestMessages = includeHistory ? nextMessages : [message];
+    setResendingIndex(index);
+    await sendMessages(nextMessages, requestMessages);
   };
 
   const clearMessages = () => {
     setMessages([]);
     setSelectedImages([]);
+    setSelectedFiles([]);
     setRawResponse('');
+    setLastElapsedMs(null);
     setStatus(undefined);
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -333,6 +421,36 @@ export function ChatTestPage() {
 
   const removeSelectedImage = (index: number) => {
     setSelectedImages((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    const textFiles = files.filter(isTextFile);
+    const skipped = files.length - textFiles.length;
+
+    if (skipped > 0) {
+      showNotification(
+        t('chat_test.file_skipped', {
+          count: skipped,
+          defaultValue: '已跳过 {{count}} 个非文本文件',
+        }),
+        'warning'
+      );
+    }
+    if (!textFiles.length) return;
+
+    try {
+      const attachments = await Promise.all(textFiles.map(readTextFile));
+      setSelectedFiles((current) => [...current, ...attachments]);
+    } catch (error: unknown) {
+      const text = error instanceof Error ? error.message : String(error || '');
+      setStatus({ type: 'error', text });
+      showNotification(text, 'error');
+    }
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
   return (
@@ -367,11 +485,38 @@ export function ChatTestPage() {
                     message.role === 'user' ? styles.messageUser : styles.messageAssistant
                   }`}
                 >
-                  <span className={styles.role}>
-                    {message.role === 'user'
-                      ? t('chat_test.user', { defaultValue: '用户' })
-                      : t('chat_test.assistant', { defaultValue: '助手' })}
-                  </span>
+                  <div className={styles.messageHeader}>
+                    <span className={styles.role}>
+                      {message.role === 'user'
+                        ? t('chat_test.user', { defaultValue: '用户' })
+                        : t('chat_test.assistant', { defaultValue: '助手' })}
+                    </span>
+                    {message.role === 'user' && (
+                      <button
+                        type="button"
+                        className={styles.messageAction}
+                        onClick={() => void handleResend(index)}
+                        disabled={sending}
+                        title={t('chat_test.resend', { defaultValue: '重新发送' })}
+                        aria-label={t('chat_test.resend', { defaultValue: '重新发送' })}
+                      >
+                        <IconRefreshCw size={13} />
+                        <span>
+                          {resendingIndex === index
+                            ? t('chat_test.resending', { defaultValue: '重发中' })
+                            : t('chat_test.resend', { defaultValue: '重新发送' })}
+                        </span>
+                      </button>
+                    )}
+                    {message.role === 'assistant' && typeof message.elapsedMs === 'number' && (
+                      <span className={styles.messageMetric}>
+                        {t('chat_test.elapsed', {
+                          value: formatElapsed(message.elapsedMs),
+                          defaultValue: '耗时 {{value}}',
+                        })}
+                      </span>
+                    )}
+                  </div>
                   {message.content && <div className={styles.bubble}>{message.content}</div>}
                   {message.images?.length ? (
                     <div className={styles.messageImages}>
@@ -382,6 +527,16 @@ export function ChatTestPage() {
                           alt={image.name}
                           className={styles.messageImage}
                         />
+                      ))}
+                    </div>
+                  ) : null}
+                  {message.files?.length ? (
+                    <div className={styles.fileChips}>
+                      {message.files.map((file, fileIndex) => (
+                        <span key={`${file.name}-${fileIndex}`} className={styles.fileChip} title={file.name}>
+                          {file.name}
+                          {file.truncated ? ` · ${t('chat_test.file_truncated', { defaultValue: '已截断' })}` : ''}
+                        </span>
                       ))}
                     </div>
                   ) : null}
@@ -415,6 +570,15 @@ export function ChatTestPage() {
                   onChange={(event) => void handleImageChange(event)}
                   disabled={sending}
                 />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.json,.log,.md,.txt,.xml,.yaml,.yml,text/*,application/json"
+                  multiple
+                  className={styles.fileInput}
+                  onChange={(event) => void handleFileChange(event)}
+                  disabled={sending}
+                />
                 <Button
                   type="button"
                   variant="secondary"
@@ -425,11 +589,29 @@ export function ChatTestPage() {
                   <IconDownload size={14} />
                   {t('chat_test.add_image', { defaultValue: '添加图片' })}
                 </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sending}
+                >
+                  <IconDownload size={14} />
+                  {t('chat_test.add_file', { defaultValue: '添加文件' })}
+                </Button>
                 {selectedImages.length > 0 && (
                   <span className={styles.metaLine}>
                     {t('chat_test.image_count', {
                       count: selectedImages.length,
                       defaultValue: '已选 {{count}} 张图片',
+                    })}
+                  </span>
+                )}
+                {selectedFiles.length > 0 && (
+                  <span className={styles.metaLine}>
+                    {t('chat_test.file_count', {
+                      count: selectedFiles.length,
+                      defaultValue: '已选 {{count}} 个文件',
                     })}
                   </span>
                 )}
@@ -449,6 +631,29 @@ export function ChatTestPage() {
                         <IconX size={14} />
                       </button>
                       <span title={image.name}>{image.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedFiles.length > 0 && (
+                <div className={styles.filePreviewList}>
+                  {selectedFiles.map((file, index) => (
+                    <div key={`${file.name}-${index}`} className={styles.filePreview}>
+                      <span title={file.name}>
+                        {file.name}
+                        {file.truncated
+                          ? ` · ${t('chat_test.file_truncated', { defaultValue: '已截断' })}`
+                          : ''}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.removeFile}
+                        onClick={() => removeSelectedFile(index)}
+                        aria-label={t('common.delete')}
+                        disabled={sending}
+                      >
+                        <IconX size={14} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -525,6 +730,14 @@ export function ChatTestPage() {
                 defaultValue: '历史消息 {{count}} 条',
               })}
             </div>
+            {lastElapsedMs !== null && (
+              <div className={styles.metaLine}>
+                {t('chat_test.last_elapsed', {
+                  value: formatElapsed(lastElapsedMs),
+                  defaultValue: '最近响应耗时 {{value}}',
+                })}
+              </div>
+            )}
             {status && <div className={`status-badge ${status.type}`}>{status.text}</div>}
             {rawResponse && (
               <div className={styles.field}>
