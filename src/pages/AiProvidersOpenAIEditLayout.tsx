@@ -10,6 +10,7 @@ import type { ApiKeyEntry, OpenAIProviderConfig } from '@/types';
 import type { ModelInfo } from '@/utils/models';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import { areKeyValueEntriesEqual, areModelEntriesEqual } from '@/utils/compare';
+import { parseRouteIndexParam } from '@/utils/routeParams';
 import { buildApiKeyEntry } from '@/components/providers/utils';
 import type { ModelEntry, OpenAIFormState } from '@/components/providers/types';
 import type { KeyTestStatus, OpenAIEditBaseline } from '@/stores/useOpenAIEditDraftStore';
@@ -84,12 +85,6 @@ const mergePastedApiKeys = (entries: ApiKeyEntry[], apiKeys?: string[]) => {
     entries: [...baseEntries, ...nextKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))],
     addedCount: nextKeys.length,
   };
-};
-
-const parseIndexParam = (value: string | undefined) => {
-  if (!value) return null;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const getErrorMessage = (err: unknown) => {
@@ -174,7 +169,7 @@ export function AiProvidersOpenAIEditLayout() {
 
   const params = useParams<{ index?: string }>();
   const hasIndexParam = typeof params.index === 'string';
-  const editIndex = useMemo(() => parseIndexParam(params.index), [params.index]);
+  const editIndex = useMemo(() => parseRouteIndexParam(params.index), [params.index]);
   const invalidIndexParam = hasIndexParam && editIndex === null;
 
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
