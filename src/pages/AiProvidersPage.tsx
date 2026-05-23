@@ -95,6 +95,9 @@ const getCurrentHashPath = () => {
   return hash.split('?')[0] || '/';
 };
 
+const hasRuntimeAuthIndex = (items?: Array<{ authIndex?: string }>) =>
+  Boolean(items?.some((item) => item.authIndex?.trim()));
+
 export function AiProvidersPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -186,8 +189,19 @@ export function AiProvidersPage() {
     }
     setError('');
     try {
-      const [configResult, vertexResult, ampcodeResult, openaiResult] = await Promise.allSettled([
+      const [
+        configResult,
+        geminiResult,
+        codexResult,
+        claudeResult,
+        vertexResult,
+        ampcodeResult,
+        openaiResult,
+      ] = await Promise.allSettled([
         fetchConfig(),
+        providersApi.getGeminiKeys(),
+        providersApi.getCodexConfigs(),
+        providersApi.getClaudeConfigs(),
         providersApi.getVertexConfigs(),
         ampcodeApi.getAmpcode(),
         providersApi.getOpenAIProviders(),
@@ -203,6 +217,24 @@ export function AiProvidersPage() {
       setClaudeConfigs(data?.claudeApiKeys || []);
       setVertexConfigs(data?.vertexApiKeys || []);
       setOpenaiProviders(data?.openaiCompatibility || []);
+
+      if (geminiResult.status === 'fulfilled') {
+        setGeminiKeys(geminiResult.value || []);
+        updateConfigValue('gemini-api-key', geminiResult.value || []);
+        clearCache('gemini-api-key');
+      }
+
+      if (codexResult.status === 'fulfilled') {
+        setCodexConfigs(codexResult.value || []);
+        updateConfigValue('codex-api-key', codexResult.value || []);
+        clearCache('codex-api-key');
+      }
+
+      if (claudeResult.status === 'fulfilled') {
+        setClaudeConfigs(claudeResult.value || []);
+        updateConfigValue('claude-api-key', claudeResult.value || []);
+        clearCache('claude-api-key');
+      }
 
       if (vertexResult.status === 'fulfilled') {
         setVertexConfigs(vertexResult.value || []);
@@ -240,9 +272,15 @@ export function AiProvidersPage() {
   }, [isCurrentLayer, loadRecentRequests]);
 
   useEffect(() => {
-    if (config?.geminiApiKeys) setGeminiKeys(config.geminiApiKeys);
-    if (config?.codexApiKeys) setCodexConfigs(config.codexApiKeys);
-    if (config?.claudeApiKeys) setClaudeConfigs(config.claudeApiKeys);
+    if (config?.geminiApiKeys) {
+      setGeminiKeys((prev) => (hasRuntimeAuthIndex(prev) ? prev : config.geminiApiKeys || []));
+    }
+    if (config?.codexApiKeys) {
+      setCodexConfigs((prev) => (hasRuntimeAuthIndex(prev) ? prev : config.codexApiKeys || []));
+    }
+    if (config?.claudeApiKeys) {
+      setClaudeConfigs((prev) => (hasRuntimeAuthIndex(prev) ? prev : config.claudeApiKeys || []));
+    }
     if (config?.vertexApiKeys) setVertexConfigs(config.vertexApiKeys);
     if (config?.openaiCompatibility) setOpenaiProviders(config.openaiCompatibility);
   }, [

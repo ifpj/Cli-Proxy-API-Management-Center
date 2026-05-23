@@ -182,15 +182,25 @@ export function AiProvidersCodexEditPage() {
     setLoading(true);
     setError('');
 
-    fetchConfig('codex-api-key')
+    providersApi
+      .getCodexConfigs()
       .then((value) => {
         if (cancelled) return;
-        setConfigs(Array.isArray(value) ? (value as ProviderKeyConfig[]) : []);
+        setConfigs(value || []);
+        updateConfigValue('codex-api-key', value || []);
+        clearCache('codex-api-key');
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : '';
-        setError(message || t('notification.refresh_failed'));
+        try {
+          const fallback = await fetchConfig('codex-api-key');
+          if (cancelled) return;
+          setConfigs(Array.isArray(fallback) ? (fallback as ProviderKeyConfig[]) : []);
+        } catch {
+          if (cancelled) return;
+          const message = err instanceof Error ? err.message : '';
+          setError(message || t('notification.refresh_failed'));
+        }
       })
       .finally(() => {
         if (cancelled) return;
@@ -200,7 +210,7 @@ export function AiProvidersCodexEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [fetchConfig, t]);
+  }, [clearCache, fetchConfig, t, updateConfigValue]);
 
   useEffect(() => {
     if (loading) return;
@@ -409,7 +419,8 @@ export function AiProvidersCodexEditPage() {
       const list = await modelsApi.fetchV1ModelsViaApiCall(
         form.baseUrl ?? '',
         hasCustomAuthorization ? undefined : apiKey,
-        headerObject
+        headerObject,
+        form.authIndex
       );
       if (modelDiscoveryRequestIdRef.current !== requestId) return;
       setDiscoveredModels(list);
@@ -423,7 +434,7 @@ export function AiProvidersCodexEditPage() {
         setModelDiscoveryFetching(false);
       }
     }
-  }, [form.apiKey, form.baseUrl, form.headers, t]);
+  }, [form.apiKey, form.authIndex, form.baseUrl, form.headers, t]);
 
   useEffect(() => {
     if (!modelDiscoveryOpen) {
@@ -671,7 +682,14 @@ export function AiProvidersCodexEditPage() {
           : [...configs, payload];
 
       await providersApi.saveCodexConfigs(nextList);
-      updateConfigValue('codex-api-key', nextList);
+      let syncedList = nextList;
+      try {
+        syncedList = await providersApi.getCodexConfigs();
+      } catch {
+        // 保存已成功，刷新失败时使用本地计算结果兜底。
+      }
+      setConfigs(syncedList);
+      updateConfigValue('codex-api-key', syncedList);
       clearCache('codex-api-key');
       showNotification(
         editIndex !== null
