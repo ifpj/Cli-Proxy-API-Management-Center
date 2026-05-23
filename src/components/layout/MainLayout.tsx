@@ -238,6 +238,7 @@ export function MainLayout() {
   const fullBrandName = 'CLI Proxy API Management Center';
   const abbrBrandName = t('title.abbr');
   const isLogsPage = location.pathname.startsWith('/logs');
+  const isChatTestPage = location.pathname.startsWith('/chat-test');
   const showSidebarLabels = !sidebarCollapsed || sidebarOpen;
 
   // 将顶部悬浮控制区高度写入 CSS 变量，供移动端粘性元素和浮层避让。
@@ -673,8 +674,25 @@ export function MainLayout() {
           </div>
         </aside>
 
-        <div className={`content${isLogsPage ? ' content-logs' : ''}`} ref={contentRef}>
-          <main className={`main-content${isLogsPage ? ' main-content-logs' : ''}`}>
+        <div
+          className={[
+            'content',
+            isLogsPage ? 'content-logs' : '',
+            isChatTestPage ? 'content-contained' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          ref={contentRef}
+        >
+          <main
+            className={[
+              'main-content',
+              isLogsPage ? 'main-content-logs' : '',
+              isChatTestPage ? 'main-content-contained' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
             <PageTransition
               render={(location) => <MainRoutes location={location} />}
               getRouteOrder={getRouteOrder}
