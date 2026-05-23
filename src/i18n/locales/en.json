@@ -119,6 +119,7 @@
     "config_management": "Config Panel",
     "logs": "Logs Viewer",
     "models": "Models",
+    "chat_test": "Chat Test",
     "system_info": "Management Center Info"
   },
   "dashboard": {
