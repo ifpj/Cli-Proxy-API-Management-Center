@@ -440,6 +440,17 @@ export function IconSidebarModels({ size = 20, ...props }: IconProps) {
   );
 }
 
+export function IconSidebarChat({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...sidebarSvgProps} width={size} height={size} {...props}>
+      <path d="M5 5.5h14a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2H11l-5 4v-4H5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" />
+      <path d="M8 10h8" />
+      <path d="M8 13.5h5" />
+      <circle cx="17.5" cy="13.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IconSidebarAuthFiles({ size = 20, ...props }: IconProps) {
   return (
     <svg {...sidebarSvgProps} width={size} height={size} {...props}>

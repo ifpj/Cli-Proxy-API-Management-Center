@@ -20,6 +20,7 @@ import { ConfigPage } from '@/pages/ConfigPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
 import { ModelsPage } from '@/pages/ModelsPage';
+import { ChatTestPage } from '@/pages/ChatTestPage';
 
 const mainRoutes = [
   { path: '/', element: <DashboardPage /> },
@@ -75,6 +76,7 @@ const mainRoutes = [
   { path: '/config', element: <ConfigPage /> },
   { path: '/logs', element: <LogsPage /> },
   { path: '/models', element: <ModelsPage /> },
+  { path: '/chat-test', element: <ChatTestPage /> },
   { path: '/system', element: <SystemPage /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ];

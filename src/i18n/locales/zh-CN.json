@@ -118,6 +118,7 @@
     "config_management": "配置面板",
     "logs": "日志查看",
     "models": "模型列表",
+    "chat_test": "对话测试",
     "system_info": "中心信息"
   },
   "dashboard": {

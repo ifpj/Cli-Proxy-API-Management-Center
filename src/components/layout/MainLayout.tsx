@@ -14,6 +14,7 @@ import { PageTransition } from '@/components/common/PageTransition';
 import { MainRoutes } from '@/router/MainRoutes';
 import {
   IconSidebarAuthFiles,
+  IconSidebarChat,
   IconSidebarConfig,
   IconSidebarDashboard,
   IconSidebarLogs,
@@ -45,6 +46,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   config: <IconSidebarConfig size={18} />,
   logs: <IconSidebarLogs size={18} />,
   models: <IconSidebarModels size={18} />,
+  chatTest: <IconSidebarChat size={18} />,
   system: <IconSidebarSystem size={18} />,
 };
 
@@ -397,6 +399,7 @@ export function MainLayout() {
       ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]
       : []),
     { path: '/models', label: t('nav.models'), icon: sidebarIcons.models },
+    { path: '/chat-test', label: t('nav.chat_test'), icon: sidebarIcons.chatTest },
     { path: '/system', label: t('nav.system_info'), icon: sidebarIcons.system },
   ];
   const navOrder = navItems.map((item) => item.path);

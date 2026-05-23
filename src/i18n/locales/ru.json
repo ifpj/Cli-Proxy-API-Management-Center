@@ -118,6 +118,7 @@
     "config_management": "Панель конфигурации",
     "logs": "Просмотр логов",
     "models": "Модели",
+    "chat_test": "Тест чата",
     "system_info": "Информация системы"
   },
   "dashboard": {

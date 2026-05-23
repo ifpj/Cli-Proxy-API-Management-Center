@@ -118,6 +118,7 @@
     "config_management": "設定面板",
     "logs": "記錄檢視",
     "models": "模型清單",
+    "chat_test": "對話測試",
     "system_info": "中心資訊"
   },
   "dashboard": {

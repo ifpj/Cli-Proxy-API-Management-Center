@@ -7,6 +7,8 @@ export interface ModelInfo {
   name: string;
   alias?: string;
   description?: string;
+  group?: string;
+  groupLabel?: string;
 }
 
 const MODEL_CATEGORIES = [
@@ -34,9 +36,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
 export function normalizeModelList(payload: unknown, { dedupe = false } = {}): ModelInfo[] {
-  const toModel = (entry: unknown): ModelInfo | null => {
+  const toModel = (entry: unknown, inheritedGroup?: string): ModelInfo | null => {
     if (typeof entry === 'string') {
-      return { name: entry };
+      const model: ModelInfo = { name: entry };
+      if (inheritedGroup) {
+        model.group = inheritedGroup;
+        model.groupLabel = inheritedGroup;
+      }
+      return model;
     }
     if (!isRecord(entry)) {
       return null;
@@ -46,6 +53,8 @@ export function normalizeModelList(payload: unknown, { dedupe = false } = {}): M
 
     const alias = entry.alias || entry.display_name || entry.displayName;
     const description = entry.description || entry.note || entry.comment;
+    const group = entry.group || entry.category || entry.provider || entry.type || inheritedGroup;
+    const groupLabel = entry.groupLabel || entry.group_label || entry.categoryLabel || entry.category_label || group;
     const model: ModelInfo = { name: String(name) };
     if (alias && alias !== name) {
       model.alias = String(alias);
@@ -53,18 +62,34 @@ export function normalizeModelList(payload: unknown, { dedupe = false } = {}): M
     if (description) {
       model.description = String(description);
     }
+    if (group) {
+      model.group = String(group);
+    }
+    if (groupLabel) {
+      model.groupLabel = String(groupLabel);
+    }
     return model;
   };
 
   let models: (ModelInfo | null)[] = [];
+  const fromGroupedRecord = (record: Record<string, unknown>) =>
+    Object.entries(record).flatMap(([group, entries]) =>
+      Array.isArray(entries) ? entries.map((entry) => toModel(entry, group)) : []
+    );
 
   if (Array.isArray(payload)) {
-    models = payload.map(toModel);
+    models = payload.map((entry) => toModel(entry));
   } else if (isRecord(payload)) {
     if (Array.isArray(payload.data)) {
-      models = payload.data.map(toModel);
+      models = payload.data.map((entry) => toModel(entry));
+    } else if (isRecord(payload.data)) {
+      models = fromGroupedRecord(payload.data);
     } else if (Array.isArray(payload.models)) {
-      models = payload.models.map(toModel);
+      models = payload.models.map((entry) => toModel(entry));
+    } else if (isRecord(payload.models)) {
+      models = fromGroupedRecord(payload.models);
+    } else {
+      models = fromGroupedRecord(payload);
     }
   }
 
@@ -91,6 +116,8 @@ export interface ModelGroup {
 }
 
 export function classifyModels(models: ModelInfo[] = [], { otherLabel = 'Other' } = {}): ModelGroup[] {
+  const explicitGroups: ModelGroup[] = [];
+  const explicitGroupMap = new Map<string, ModelGroup>();
   const groups: ModelGroup[] = MODEL_CATEGORIES.map((category) => ({
     id: category.id,
     label: category.label,
@@ -100,6 +127,24 @@ export function classifyModels(models: ModelInfo[] = [], { otherLabel = 'Other' 
   const otherGroup: ModelGroup = { id: 'other', label: otherLabel, items: [] };
 
   models.forEach((model) => {
+    const explicitGroup = model?.group?.trim();
+    if (explicitGroup) {
+      const key = explicitGroup.toLowerCase();
+      const existing = explicitGroupMap.get(key);
+      if (existing) {
+        existing.items.push(model);
+        return;
+      }
+      const nextGroup = {
+        id: `group:${key}`,
+        label: model.groupLabel?.trim() || explicitGroup,
+        items: [model]
+      };
+      explicitGroupMap.set(key, nextGroup);
+      explicitGroups.push(nextGroup);
+      return;
+    }
+
     const name = (model?.name || '').toString();
     const alias = (model?.alias || '').toString();
     const haystack = `${name} ${alias}`.toLowerCase();
@@ -114,6 +159,9 @@ export function classifyModels(models: ModelInfo[] = [], { otherLabel = 'Other' 
   });
 
   const populatedGroups = groups.filter((group) => group.items.length > 0);
+  if (explicitGroups.length) {
+    populatedGroups.unshift(...explicitGroups);
+  }
   if (otherGroup.items.length) {
     populatedGroups.push(otherGroup);
   }
