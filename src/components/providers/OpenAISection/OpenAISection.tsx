@@ -13,7 +13,12 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconEye,
+  IconInfo,
+  IconModelCluster,
+  IconPencil,
+  IconPlay,
   IconSlidersHorizontal,
+  IconTrash2,
   IconX,
 } from '@/components/ui/icons';
 import iconOpenaiLight from '@/assets/icons/openai-light.svg';
@@ -115,7 +120,6 @@ export function OpenAISection({
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [keyModalProvider, setKeyModalProvider] = useState<IndexedOpenAIProvider | null>(null);
-  const [modelModalProvider, setModelModalProvider] = useState<IndexedOpenAIProvider | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownLayout, setDropdownLayout] = useState({ openAbove: false, maxHeight: 300 });
   const [floatingToolbarStyle, setFloatingToolbarStyle] = useState<FloatingToolbarStyle>({
@@ -565,6 +569,8 @@ export function OpenAISection({
   const renderProviderCard = ({ config: provider, originalIndex }: IndexedOpenAIProvider) => {
     const stats = getOpenAIProviderTotalStats(provider, usageByProvider);
     const headerEntries = Object.entries(provider.headers || {});
+    const userAgentHeader = headerEntries.find(([key]) => key.toLowerCase() === 'user-agent');
+    const visibleHeaderEntries = headerEntries.filter(([key]) => key.toLowerCase() !== 'user-agent');
     const apiKeyEntries = provider.apiKeyEntries || [];
     const statusData =
       statusBarCache.get(getOpenAIProviderKey(provider, originalIndex)) || EMPTY_STATUS_BAR;
@@ -584,16 +590,58 @@ export function OpenAISection({
       >
         <div className={styles.openaiProviderMeta}>
           <div className={styles.providerCardTopBar}>
-            <div className={styles.openaiProviderTitle}>{provider.name}</div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onTest(originalIndex)}
-              loading={testResult?.status === 'loading'}
-              disabled={actionsDisabled || !apiKeyEntries.some((entry) => entry.apiKey?.trim())}
-            >
-              {t('ai_providers.openai_test_single_action')}
-            </Button>
+            <div className={styles.openaiProviderTitle}>
+              <span>{provider.name}</span>
+              {provider.priority !== undefined && (
+                <span className={styles.openaiProviderPriority}>
+                  {t('common.priority')}: {provider.priority}
+                </span>
+              )}
+            </div>
+            <div className={styles.openaiProviderTopActions}>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={styles.openaiProviderIconButton}
+                onClick={() => onTest(originalIndex)}
+                loading={testResult?.status === 'loading'}
+                disabled={actionsDisabled || !apiKeyEntries.some((entry) => entry.apiKey?.trim())}
+                aria-label={t('ai_providers.openai_test_single_action')}
+                title={t('ai_providers.openai_test_single_action')}
+              >
+                <IconPlay size={15} />
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={styles.openaiProviderIconButton}
+                onClick={() => onEdit(originalIndex)}
+                disabled={actionsDisabled}
+                aria-label={t('common.edit')}
+                title={t('common.edit')}
+              >
+                <IconPencil size={15} />
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                className={styles.openaiProviderIconButton}
+                onClick={() => onDelete(originalIndex)}
+                disabled={actionsDisabled}
+                aria-label={t('common.delete')}
+                title={t('common.delete')}
+              >
+                <IconTrash2 size={15} />
+              </Button>
+              <span className={styles.openaiProviderToggleAction} title={t('ai_providers.config_toggle_label')}>
+                <ToggleSwitch
+                  ariaLabel={t('ai_providers.config_toggle_label')}
+                  checked={!providerDisabled}
+                  disabled={toggleDisabled}
+                  onChange={(value) => void onToggle(originalIndex, value)}
+                />
+              </span>
+            </div>
           </div>
           {testResult?.message && (
             <div className={styles.openaiTestResultGroup}>
@@ -662,12 +710,6 @@ export function OpenAISection({
               )}
             </div>
           )}
-          {provider.priority !== undefined && (
-            <div className={styles.fieldRow}>
-              <span className={styles.fieldLabel}>{t('common.priority')}:</span>
-              <span className={styles.fieldValue}>{provider.priority}</span>
-            </div>
-          )}
           {provider.prefix && (
             <div className={styles.fieldRow}>
               <span className={styles.fieldLabel}>{t('common.prefix')}:</span>
@@ -677,156 +719,144 @@ export function OpenAISection({
           <div className={styles.fieldRow}>
             <span className={styles.fieldLabel}>{t('common.base_url')}:</span>
             <span className={styles.fieldValue}>{provider.baseUrl}</span>
+            {userAgentHeader && (
+              <span
+                className={styles.openaiHeaderInfoIcon}
+                title={`${userAgentHeader[0]}: ${userAgentHeader[1]}`}
+                aria-label={`${userAgentHeader[0]}: ${userAgentHeader[1]}`}
+                tabIndex={0}
+              >
+                <IconInfo size={13} />
+              </span>
+            )}
           </div>
           {providerDisabled && (
             <div className="status-badge warning" style={{ marginTop: 8, marginBottom: 0 }}>
               {t('ai_providers.config_disabled_badge')}
             </div>
           )}
-          {headerEntries.length > 0 && (
+          {visibleHeaderEntries.length > 0 && (
             <div className={styles.headerBadgeList}>
-              {headerEntries.map(([key, value]) => (
+              {visibleHeaderEntries.map(([key, value]) => (
                 <span key={key} className={styles.headerBadge}>
                   <strong>{key}:</strong> {value}
                 </span>
               ))}
             </div>
           )}
-          {apiKeyEntries.length > 0 && (
-            <div className={styles.apiKeyEntriesSection}>
-              {apiKeyEntries.length === 1 ? (
-                (() => {
-                  const entry = apiKeyEntries[0];
-                  const entryStats = getProviderTotalStats(
-                    usageByProvider,
-                    provider.name,
-                    entry.apiKey,
-                    provider.baseUrl
-                  );
-                  const shouldWarnKey = entryStats.success === 0 && entryStats.failure >= 3;
-                  return (
-                    <div
-                      className={`${styles.apiKeyEntryCard} ${
-                        shouldWarnKey ? styles.apiKeyEntryCardWarning : ''
-                      }`}
-                    >
-                      <span className={styles.apiKeyEntryIndex}>1</span>
-                      <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
-                      {entry.proxyUrl && (
-                        <span className={styles.apiKeyEntryProxy}>{entry.proxyUrl}</span>
-                      )}
-                      <div className={styles.apiKeyEntryStats}>
-                        <span
-                          className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
-                        >
-                          <IconCheck size={12} /> {entryStats.success}
-                        </span>
-                        <span
-                          className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
-                        >
-                          <IconX size={12} /> {entryStats.failure}
-                        </span>
+          <div className={styles.openaiProviderResourceGrid}>
+            {apiKeyEntries.length > 0 && (
+              <div
+                className={`${styles.apiKeyEntriesSection} ${
+                  apiKeyEntries.length === 1 ? styles.openaiProviderResourceWide : ''
+                }`}
+              >
+                {apiKeyEntries.length === 1 ? (
+                  (() => {
+                    const entry = apiKeyEntries[0];
+                    const entryStats = getProviderTotalStats(
+                      usageByProvider,
+                      provider.name,
+                      entry.apiKey,
+                      provider.baseUrl
+                    );
+                    const shouldWarnKey = entryStats.success === 0 && entryStats.failure >= 3;
+                    return (
+                      <div
+                        className={`${styles.apiKeyEntryCard} ${
+                          shouldWarnKey ? styles.apiKeyEntryCardWarning : ''
+                        }`}
+                      >
+                        <span className={styles.apiKeyEntryIndex}>1</span>
+                        <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
+                        {entry.proxyUrl && (
+                          <span className={styles.apiKeyEntryProxy}>{entry.proxyUrl}</span>
+                        )}
+                        <div className={styles.apiKeyEntryStats}>
+                          <span
+                            className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
+                          >
+                            <IconCheck size={12} /> {entryStats.success}
+                          </span>
+                          <span
+                            className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
+                          >
+                            <IconX size={12} /> {entryStats.failure}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()
-              ) : (
-                <button
-                  type="button"
-                  className={styles.apiKeyEntriesSummary}
-                  onClick={() => setKeyModalProvider({ config: provider, originalIndex })}
-                >
-                  <span className={styles.apiKeyEntriesLabel}>
-                    {t('ai_providers.openai_keys_count')}: {apiKeyEntries.length}
-                  </span>
-                  <span className={styles.apiKeyEntriesSummaryAction}>
-                    {t('ai_providers.openai_keys_view_action')}
-                    <IconEye size={14} />
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
-          {provider.models?.length ? (
-            provider.models.length === 1 ? (
-              <div className={styles.modelTagList}>
-                <span className={styles.modelTag}>
-                  <span className={styles.modelName}>{provider.models[0].name}</span>
-                  {provider.models[0].alias &&
-                    provider.models[0].alias !== provider.models[0].name && (
-                      <span className={styles.modelAlias}>{provider.models[0].alias}</span>
-                    )}
-                </span>
+                    );
+                  })()
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.apiKeyEntriesSummary}
+                    onClick={() => setKeyModalProvider({ config: provider, originalIndex })}
+                  >
+                    <span className={styles.apiKeyEntriesLabel}>
+                      {t('ai_providers.openai_keys_count')}: {apiKeyEntries.length}
+                    </span>
+                    <span className={styles.apiKeyEntriesSummaryAction}>
+                      <IconEye size={14} />
+                    </span>
+                  </button>
+                )}
               </div>
-            ) : (
+            )}
+            {provider.models?.length ? (
               <div className={styles.modelEntriesSection}>
-                <button
-                  type="button"
-                  className={styles.modelEntriesSummary}
-                  onClick={() => setModelModalProvider({ config: provider, originalIndex })}
-                >
+                <div className={styles.modelEntriesSummary} tabIndex={0}>
                   <span className={styles.modelEntriesLabel}>
                     {t('ai_providers.openai_models_count')}: {provider.models.length}
                   </span>
                   <span className={styles.modelEntriesSummaryAction}>
-                    {t('ai_providers.openai_models_view_action')}
-                    <IconEye size={14} />
+                    <IconModelCluster size={14} />
                   </span>
-                </button>
+                  <div className={styles.modelEntriesHoverPanel}>
+                    <div className={styles.modelTagList}>
+                      {provider.models.map((model) => (
+                        <span key={model.name} className={styles.modelTag}>
+                          <span className={styles.modelName}>{model.name}</span>
+                          {model.alias && model.alias !== model.name && (
+                            <span className={styles.modelAlias}>{model.alias}</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-            )
-          ) : (
-            <div className={styles.fieldRow} style={{ marginTop: '8px' }}>
-              <span className={styles.fieldLabel}>{t('ai_providers.openai_models_count')}:</span>
-              <span className={styles.fieldValue}>0</span>
-            </div>
-          )}
+            ) : (
+              <div className={styles.openaiProviderResourceEmpty}>
+                <span className={styles.modelEntriesLabel}>
+                  {t('ai_providers.openai_models_count')}: 0
+                </span>
+              </div>
+            )}
+          </div>
           {provider.testModel && (
             <div className={styles.fieldRow}>
               <span className={styles.fieldLabel}>{t('ai_providers.openai_test_model')}:</span>
               <span className={styles.fieldValue}>{provider.testModel}</span>
             </div>
           )}
-          <div className={styles.cardStats}>
-            <span className={`${styles.statPill} ${styles.statSuccess}`}>
-              {t('stats.success')}: {stats.success}
-            </span>
-            <span className={`${styles.statPill} ${styles.statFailure}`}>
-              {t('stats.failure')}: {stats.failure}
-            </span>
+          <div className={styles.openaiProviderHealthRow}>
+            <div className={styles.cardStats}>
+              <span className={`${styles.statPill} ${styles.statSuccess}`}>
+                {t('stats.success')}: {stats.success}
+              </span>
+              <span className={`${styles.statPill} ${styles.statFailure}`}>
+                {t('stats.failure')}: {stats.failure}
+              </span>
+            </div>
+            <ProviderStatusBar statusData={statusData} />
           </div>
-          <ProviderStatusBar statusData={statusData} />
-        </div>
-        <div className={styles.openaiProviderActions}>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onEdit(originalIndex)}
-            disabled={actionsDisabled}
-          >
-            {t('common.edit')}
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => onDelete(originalIndex)}
-            disabled={actionsDisabled}
-          >
-            {t('common.delete')}
-          </Button>
-          <ToggleSwitch
-            label={t('ai_providers.config_toggle_label')}
-            checked={!providerDisabled}
-            disabled={toggleDisabled}
-            onChange={(value) => void onToggle(originalIndex, value)}
-          />
         </div>
       </div>
     );
   };
 
   const keyModalEntries = keyModalProvider?.config.apiKeyEntries || [];
-  const modelModalEntries = modelModalProvider?.config.models || [];
 
   return (
     <>
@@ -945,41 +975,6 @@ export function OpenAISection({
                   </div>
                 );
               })}
-            </div>
-          </div>
-        )}
-      </Modal>
-      <Modal
-        open={modelModalProvider !== null}
-        title={
-          modelModalProvider
-            ? t('ai_providers.openai_models_modal_title', {
-                name: modelModalProvider.config.name,
-              })
-            : undefined
-        }
-        width={680}
-        onClose={() => setModelModalProvider(null)}
-        footer={
-          <Button variant="secondary" onClick={() => setModelModalProvider(null)}>
-            {t('common.close')}
-          </Button>
-        }
-      >
-        {modelModalProvider && (
-          <div className={styles.modelEntriesModalBody}>
-            <div className={styles.modelEntriesModalMeta}>
-              {t('ai_providers.openai_models_count')}: {modelModalEntries.length}
-            </div>
-            <div className={styles.modelTagList}>
-              {modelModalEntries.map((model) => (
-                <span key={model.name} className={styles.modelTag}>
-                  <span className={styles.modelName}>{model.name}</span>
-                  {model.alias && model.alias !== model.name && (
-                    <span className={styles.modelAlias}>{model.alias}</span>
-                  )}
-                </span>
-              ))}
             </div>
           </div>
         )}
