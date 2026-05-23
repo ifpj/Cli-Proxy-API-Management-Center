@@ -17,6 +17,7 @@ import {
   IconSidebarConfig,
   IconSidebarDashboard,
   IconSidebarLogs,
+  IconSidebarModels,
   IconSidebarOauth,
   IconSidebarProviders,
   IconSidebarQuota,
@@ -43,6 +44,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   quota: <IconSidebarQuota size={18} />,
   config: <IconSidebarConfig size={18} />,
   logs: <IconSidebarLogs size={18} />,
+  models: <IconSidebarModels size={18} />,
   system: <IconSidebarSystem size={18} />,
 };
 
@@ -394,6 +396,7 @@ export function MainLayout() {
     ...(config?.loggingToFile
       ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]
       : []),
+    { path: '/models', label: t('nav.models'), icon: sidebarIcons.models },
     { path: '/system', label: t('nav.system_info'), icon: sidebarIcons.system },
   ];
   const navOrder = navItems.map((item) => item.path);

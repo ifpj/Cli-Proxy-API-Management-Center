@@ -118,6 +118,7 @@
     "quota_management": "Управление квотами",
     "config_management": "Панель конфигурации",
     "logs": "Просмотр логов",
+    "models": "Модели",
     "system_info": "Информация системы"
   },
   "dashboard": {
