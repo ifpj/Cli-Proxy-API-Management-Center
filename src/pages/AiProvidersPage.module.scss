@@ -36,10 +36,171 @@ $openai-toolbar-control-height: 36px;
 .content {
   display: flex;
   flex-direction: column;
-  gap: $spacing-xl;
-  padding-bottom: calc(
-    var(--provider-nav-height, 60px) + 12px + env(safe-area-inset-bottom) + #{$spacing-md}
-  );
+  gap: $spacing-md;
+  padding-bottom: $spacing-md;
+}
+
+.providerTabs {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-primary);
+}
+
+.providerTabList {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.providerToolbarRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-md;
+  width: 100%;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.providerSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.providerSummaryItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  strong {
+    color: var(--text-primary);
+    font-size: 13px;
+  }
+}
+
+.providerToolbarSlot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  min-width: 0;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.providerTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: max-content;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color $transition-fast,
+    border-color $transition-fast,
+    color $transition-fast;
+
+  &:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--primary-color) 45%, transparent);
+    outline-offset: 2px;
+  }
+}
+
+.providerTabActive {
+  border-color: color-mix(in srgb, var(--primary-color) 38%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--bg-primary));
+  color: var(--text-primary);
+}
+
+.providerTabIcon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.providerTabPanel {
+  min-width: 0;
+
+  :global(.card) {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :global(.card-header) {
+    margin: 0 0 $spacing-md;
+    padding: $spacing-md 0 $spacing-sm;
+    border-bottom: 1px solid var(--border-color);
+  }
+}
+
+@include mobile {
+  .providerToolbarRow {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .providerToolbarSlot {
+    justify-content: flex-start;
+
+    .cardHeaderActions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+  }
+
+  .providerTabPanel {
+    :global(.card-header) {
+      align-items: stretch;
+    }
+  }
 }
 
 .section {
@@ -108,15 +269,19 @@ $openai-toolbar-control-height: 36px;
 .openaiProviderTitle {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   min-width: 0;
   font-weight: 700;
   color: var(--text-primary);
+  flex: 1 1 auto;
 
   > span:first-child {
     min-width: 0;
-    overflow-wrap: anywhere;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -212,6 +377,22 @@ $openai-toolbar-control-height: 36px;
   background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   color: var(--primary-color);
   flex-shrink: 0;
+}
+
+.openaiProviderUrl {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.openaiProviderUrlRow {
+  flex-wrap: nowrap;
+  align-items: center;
 }
 
 // 卡片头部操作区
@@ -1249,12 +1430,14 @@ $openai-toolbar-control-height: 36px;
 .openaiProviderHealthRow {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 10px;
+  flex-wrap: nowrap;
+  gap: 8px;
   margin-top: 4px;
   min-width: 0;
 
   .cardStats {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
     gap: 6px;
     margin: 0;
     padding: 0;
@@ -1262,7 +1445,9 @@ $openai-toolbar-control-height: 36px;
 
   .statPill {
     gap: 4px;
-    padding: 5px 9px;
+    min-width: 32px;
+    justify-content: center;
+    padding: 5px 8px;
     font-size: 12px;
   }
 
@@ -1270,16 +1455,17 @@ $openai-toolbar-control-height: 36px;
     gap: 6px;
     margin-top: 0;
     padding: 0;
-    flex: 1 1 190px;
-    min-width: 190px;
+    flex: 1 1 auto;
+    min-width: 0;
     max-width: 260px;
   }
 
   .statusBlocks {
-    min-width: 120px;
+    min-width: 32px;
   }
 
   .statusRate {
+    flex-shrink: 0;
     padding: 4px 7px;
   }
 }
@@ -1315,7 +1501,6 @@ $openai-toolbar-control-height: 36px;
 
   .openaiProviderHealthRow {
     .statusBar {
-      flex-basis: 100%;
       max-width: 100%;
     }
   }
