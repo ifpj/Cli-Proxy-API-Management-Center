@@ -16,7 +16,7 @@
     min-height: 0;
     height: 100%;
     flex: 1;
-    background: transparent;
+    background: var(--bg-secondary);
     backface-visibility: hidden;
     transform: translateZ(0);
 
