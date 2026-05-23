@@ -14,7 +14,13 @@ import { buildApiKeyEntry } from '@/components/providers/utils';
 import type { ModelEntry, OpenAIFormState } from '@/components/providers/types';
 import type { KeyTestStatus, OpenAIEditBaseline } from '@/stores/useOpenAIEditDraftStore';
 
-type LocationState = { fromAiProviders?: boolean } | null;
+type LocationState = {
+  fromAiProviders?: boolean;
+  openAIPastePrefill?: {
+    baseUrl?: string;
+    apiKeys?: string[];
+  };
+} | null;
 
 export type OpenAIEditOutletContext = {
   hasIndexParam: boolean;
@@ -52,6 +58,31 @@ const buildEmptyForm = (): OpenAIFormState => ({
   modelEntries: [{ name: '', alias: '' }],
   testModel: undefined,
 });
+
+const mergePastedApiKeys = (entries: ApiKeyEntry[], apiKeys?: string[]) => {
+  const currentEntries = entries.length ? entries : [buildApiKeyEntry()];
+  const existingKeys = new Set(currentEntries.map((entry) => entry.apiKey.trim()).filter(Boolean));
+  const nextKeys: string[] = [];
+
+  apiKeys?.forEach((apiKey) => {
+    const key = apiKey.trim();
+    if (!key || existingKeys.has(key)) return;
+    existingKeys.add(key);
+    nextKeys.push(key);
+  });
+
+  if (nextKeys.length === 0) {
+    return { entries: currentEntries, addedCount: 0 };
+  }
+
+  const baseEntries = currentEntries.filter(
+    (entry) => entry.apiKey.trim() || entry.proxyUrl?.trim()
+  );
+  return {
+    entries: [...baseEntries, ...nextKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))],
+    addedCount: nextKeys.length,
+  };
+};
 
 const parseIndexParam = (value: string | undefined) => {
   if (!value) return null;
@@ -303,6 +334,12 @@ export function AiProvidersOpenAIEditLayout() {
     if (draft?.initialized) return;
 
     if (initialData) {
+      const state = location.state as LocationState;
+      const pastePrefill = state?.openAIPastePrefill;
+      const mergedKeys = mergePastedApiKeys(
+        initialData.apiKeyEntries?.length ? initialData.apiKeyEntries : [buildApiKeyEntry()],
+        pastePrefill?.apiKeys
+      );
       const modelEntries = modelsToEntries(initialData.models);
       const seededForm: OpenAIFormState = {
         name: initialData.name,
@@ -312,9 +349,7 @@ export function AiProvidersOpenAIEditLayout() {
         headers: headersToEntries(initialData.headers),
         testModel: initialData.testModel,
         modelEntries,
-        apiKeyEntries: initialData.apiKeyEntries?.length
-          ? initialData.apiKeyEntries
-          : [buildApiKeyEntry()],
+        apiKeyEntries: mergedKeys.entries,
       };
 
       const available = modelEntries.map((entry) => entry.name.trim()).filter(Boolean);
@@ -331,18 +366,34 @@ export function AiProvidersOpenAIEditLayout() {
         testMessage: '',
         keyTestStatuses: [],
       });
+      if (pastePrefill?.apiKeys?.length) {
+        showNotification(
+          mergedKeys.addedCount > 0
+            ? t('ai_providers.openai_keys_bulk_added', { count: mergedKeys.addedCount })
+            : t('ai_providers.openai_keys_bulk_no_new'),
+          mergedKeys.addedCount > 0 ? 'success' : 'warning'
+        );
+      }
     } else {
+      const state = location.state as LocationState;
+      const pastePrefill = state?.openAIPastePrefill;
       const emptyForm = buildEmptyForm();
+      const mergedKeys = mergePastedApiKeys(emptyForm.apiKeyEntries, pastePrefill?.apiKeys);
+      const seededForm: OpenAIFormState = {
+        ...emptyForm,
+        baseUrl: pastePrefill?.baseUrl?.trim() || emptyForm.baseUrl,
+        apiKeyEntries: mergedKeys.entries,
+      };
       initDraft(draftKey, {
         baseline: buildOpenAIBaseline(emptyForm, ''),
-        form: emptyForm,
+        form: seededForm,
         testModel: '',
         testStatus: 'idle',
         testMessage: '',
         keyTestStatuses: [],
       });
     }
-  }, [draft?.initialized, draftKey, initDraft, initialData, loading]);
+  }, [draft?.initialized, draftKey, initDraft, initialData, loading, location.state]);
 
   useEffect(() => {
     if (loading) return;
