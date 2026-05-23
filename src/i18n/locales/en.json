@@ -118,6 +118,7 @@
     "quota_management": "Quota Management",
     "config_management": "Config Panel",
     "logs": "Logs Viewer",
+    "models": "Models",
     "system_info": "Management Center Info"
   },
   "dashboard": {
