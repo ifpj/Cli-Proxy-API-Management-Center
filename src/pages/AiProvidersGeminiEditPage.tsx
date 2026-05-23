@@ -179,15 +179,25 @@ export function AiProvidersGeminiEditPage() {
     setLoading(true);
     setError('');
 
-    fetchConfig('gemini-api-key')
+    providersApi
+      .getGeminiKeys()
       .then((value) => {
         if (cancelled) return;
-        setConfigs(Array.isArray(value) ? (value as GeminiKeyConfig[]) : []);
+        setConfigs(value || []);
+        updateConfigValue('gemini-api-key', value || []);
+        clearCache('gemini-api-key');
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : '';
-        setError(message || t('notification.refresh_failed'));
+        try {
+          const fallback = await fetchConfig('gemini-api-key');
+          if (cancelled) return;
+          setConfigs(Array.isArray(fallback) ? (fallback as GeminiKeyConfig[]) : []);
+        } catch {
+          if (cancelled) return;
+          const message = err instanceof Error ? err.message : '';
+          setError(message || t('notification.refresh_failed'));
+        }
       })
       .finally(() => {
         if (cancelled) return;
@@ -197,7 +207,7 @@ export function AiProvidersGeminiEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [fetchConfig, t]);
+  }, [clearCache, fetchConfig, t, updateConfigValue]);
 
   useEffect(() => {
     if (loading) return;
@@ -362,7 +372,8 @@ export function AiProvidersGeminiEditPage() {
       const list = await modelsApi.fetchGeminiModelsViaApiCall(
         form.baseUrl ?? '',
         form.apiKey.trim() || undefined,
-        headerObject
+        headerObject,
+        form.authIndex
       );
       if (modelDiscoveryRequestIdRef.current !== requestId) return;
       setDiscoveredModels(list);
@@ -388,7 +399,7 @@ export function AiProvidersGeminiEditPage() {
         setModelDiscoveryFetching(false);
       }
     }
-  }, [form.apiKey, form.baseUrl, form.headers, t]);
+  }, [form.apiKey, form.authIndex, form.baseUrl, form.headers, t]);
 
   useEffect(() => {
     if (!modelDiscoveryOpen) {
@@ -672,7 +683,14 @@ export function AiProvidersGeminiEditPage() {
           : [...configs, payload];
 
       await providersApi.saveGeminiKeys(nextList);
-      updateConfigValue('gemini-api-key', nextList);
+      let syncedList = nextList;
+      try {
+        syncedList = await providersApi.getGeminiKeys();
+      } catch {
+        // 保存已成功，刷新失败时使用本地计算结果兜底。
+      }
+      setConfigs(syncedList);
+      updateConfigValue('gemini-api-key', syncedList);
       clearCache('gemini-api-key');
       showNotification(
         editIndex !== null

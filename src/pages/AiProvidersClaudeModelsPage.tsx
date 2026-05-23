@@ -66,7 +66,8 @@ export function AiProvidersClaudeModelsPage() {
       const list = await modelsApi.fetchClaudeModelsViaApiCall(
         form.baseUrl ?? '',
         form.apiKey.trim() || undefined,
-        headerObject
+        headerObject,
+        form.authIndex
       );
       setModels(list);
     } catch (err: unknown) {
@@ -89,7 +90,7 @@ export function AiProvidersClaudeModelsPage() {
     } finally {
       setFetching(false);
     }
-  }, [form.apiKey, form.baseUrl, form.headers, t]);
+  }, [form.apiKey, form.authIndex, form.baseUrl, form.headers, t]);
 
   useEffect(() => {
     if (initialLoading) return;

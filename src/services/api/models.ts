@@ -24,6 +24,14 @@ const buildRequestSignature = (url: string, headers: Record<string, string>) => 
   return `${url}||${headerSignature}`;
 };
 
+const buildApiCallPayload = (
+  payload: Omit<Parameters<typeof apiCallApi.request>[0], 'authIndex'>,
+  authIndex?: string
+) => ({
+  ...(authIndex?.trim() ? { authIndex: authIndex.trim() } : {}),
+  ...payload,
+});
+
 const buildModelsEndpoint = (baseUrl: string): string => {
   const normalized = normalizeApiBase(baseUrl);
   if (!normalized) return '';
@@ -108,7 +116,8 @@ export const modelsApi = {
   async fetchV1ModelsViaApiCall(
     baseUrl: string,
     apiKey?: string,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
+    authIndex?: string
   ) {
     const endpoint = buildV1ModelsEndpoint(baseUrl);
     if (!endpoint) {
@@ -120,11 +129,13 @@ export const modelsApi = {
       resolvedHeaders.Authorization = `Bearer ${apiKey}`;
     }
 
-    const result = await apiCallApi.request({
-      method: 'GET',
-      url: endpoint,
-      header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
-    });
+    const result = await apiCallApi.request(
+      buildApiCallPayload({
+        method: 'GET',
+        url: endpoint,
+        header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
+      }, authIndex)
+    );
 
     if (result.statusCode < 200 || result.statusCode >= 300) {
       throw new Error(getApiCallErrorMessage(result));
@@ -140,7 +151,8 @@ export const modelsApi = {
   async fetchModelsViaApiCall(
     baseUrl: string,
     apiKey?: string,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
+    authIndex?: string
   ) {
     const endpoint = buildModelsEndpoint(baseUrl);
     if (!endpoint) {
@@ -152,11 +164,13 @@ export const modelsApi = {
       resolvedHeaders.Authorization = `Bearer ${apiKey}`;
     }
 
-    const result = await apiCallApi.request({
-      method: 'GET',
-      url: endpoint,
-      header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
-    });
+    const result = await apiCallApi.request(
+      buildApiCallPayload({
+        method: 'GET',
+        url: endpoint,
+        header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
+      }, authIndex)
+    );
 
     if (result.statusCode < 200 || result.statusCode >= 300) {
       throw new Error(getApiCallErrorMessage(result));
@@ -185,7 +199,8 @@ export const modelsApi = {
   async fetchClaudeModelsViaApiCall(
     baseUrl: string,
     apiKey?: string,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
+    authIndex?: string
   ) {
     const endpoint = buildClaudeModelsEndpoint(baseUrl);
     if (!endpoint) {
@@ -205,16 +220,18 @@ export const modelsApi = {
       resolvedHeaders['anthropic-version'] = DEFAULT_ANTHROPIC_VERSION;
     }
 
-    const signature = buildRequestSignature(endpoint, resolvedHeaders);
+    const signature = `${authIndex?.trim() ?? ''}||${buildRequestSignature(endpoint, resolvedHeaders)}`;
     const existing = CLAUDE_MODELS_IN_FLIGHT.get(signature);
     if (existing) return existing;
 
     const request = (async () => {
-      const result = await apiCallApi.request({
-        method: 'GET',
-        url: endpoint,
-        header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
-      });
+      const result = await apiCallApi.request(
+        buildApiCallPayload({
+          method: 'GET',
+          url: endpoint,
+          header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
+        }, authIndex)
+      );
 
       if (result.statusCode < 200 || result.statusCode >= 300) {
         throw new Error(getApiCallErrorMessage(result));
@@ -239,7 +256,8 @@ export const modelsApi = {
   async fetchGeminiModelsViaApiCall(
     baseUrl: string,
     apiKey?: string,
-    headers: Record<string, string> = {}
+    headers: Record<string, string> = {},
+    authIndex?: string
   ) {
     const endpoint = buildGeminiModelsEndpoint(baseUrl);
     if (!endpoint) {
@@ -252,7 +270,7 @@ export const modelsApi = {
       resolvedHeaders['x-goog-api-key'] = resolvedApiKey;
     }
 
-    const signature = buildRequestSignature(endpoint, resolvedHeaders);
+    const signature = `${authIndex?.trim() ?? ''}||${buildRequestSignature(endpoint, resolvedHeaders)}`;
     const existing = GEMINI_MODELS_IN_FLIGHT.get(signature);
     if (existing) return existing;
 
@@ -267,11 +285,13 @@ export const modelsApi = {
           url.searchParams.set('pageToken', pageToken);
         }
 
-        const result = await apiCallApi.request({
-          method: 'GET',
-          url: url.toString(),
-          header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
-        });
+        const result = await apiCallApi.request(
+          buildApiCallPayload({
+            method: 'GET',
+            url: url.toString(),
+            header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
+          }, authIndex)
+        );
 
         if (result.statusCode < 200 || result.statusCode >= 300) {
           throw new Error(getApiCallErrorMessage(result));
