@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { IconEye, IconModelCluster, IconPencil, IconPlay, IconTrash2 } from '@/components/ui/icons';
 import iconCodex from '@/assets/icons/codex.svg';
 import type { ProviderKeyConfig } from '@/types';
 import { maskApiKey } from '@/utils/format';
@@ -118,15 +119,8 @@ export function CodexSection({
           onEdit={(_, index) => onEdit(index)}
           onDelete={(_, index) => onDelete(index)}
           actionsDisabled={actionsDisabled}
+          hideDefaultActions
           getRowDisabled={(item) => hasDisableAllModelsRule(item.excludedModels)}
-          renderExtraActions={(item, index) => (
-            <ToggleSwitch
-              label={t('ai_providers.config_toggle_label')}
-              checked={!hasDisableAllModelsRule(item.excludedModels)}
-              disabled={toggleDisabled}
-              onChange={(value) => void onToggle(index, value)}
-            />
-          )}
           renderContent={(item, index) => {
             const stats = getProviderTotalStats(
               usageByProvider,
@@ -148,27 +142,64 @@ export function CodexSection({
             return (
               <Fragment>
                 <div className={styles.providerCardTopBar}>
-                  <div className="item-title">{t('ai_providers.codex_item_title')}</div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onTestOne(index)}
-                    loading={testResult?.status === 'loading'}
-                    disabled={actionsDisabled || !item.apiKey?.trim()}
-                  >
-                    {t('ai_providers.codex_test_action')}
-                  </Button>
-                </div>
-                <div className={styles.fieldRow}>
-                  <span className={styles.fieldLabel}>{t('common.api_key')}:</span>
-                  <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
-                </div>
-                {item.priority !== undefined && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.priority')}:</span>
-                    <span className={styles.fieldValue}>{item.priority}</span>
+                  <div className={styles.openaiProviderTitle}>
+                    <span title={t('ai_providers.codex_item_title')}>
+                      {t('ai_providers.codex_item_title')}
+                    </span>
+                    {item.priority !== undefined && (
+                      <span
+                        className={styles.openaiProviderPriority}
+                        title={`${t('common.priority')}: ${item.priority}`}
+                      >
+                        {item.priority}
+                      </span>
+                    )}
                   </div>
-                )}
+                  <div className={styles.openaiProviderTopActions}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className={styles.openaiProviderIconButton}
+                      onClick={() => onTestOne(index)}
+                      loading={testResult?.status === 'loading'}
+                      disabled={actionsDisabled || !item.apiKey?.trim()}
+                      aria-label={t('ai_providers.codex_test_action')}
+                      title={t('ai_providers.codex_test_action')}
+                    >
+                      <IconPlay size={15} />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className={styles.openaiProviderIconButton}
+                      onClick={() => onEdit(index)}
+                      disabled={actionsDisabled}
+                      aria-label={t('common.edit')}
+                      title={t('common.edit')}
+                    >
+                      <IconPencil size={15} />
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className={styles.openaiProviderIconButton}
+                      onClick={() => onDelete(index)}
+                      disabled={actionsDisabled}
+                      aria-label={t('common.delete')}
+                      title={t('common.delete')}
+                    >
+                      <IconTrash2 size={15} />
+                    </Button>
+                    <span className={styles.openaiProviderToggleAction} title={t('ai_providers.config_toggle_label')}>
+                      <ToggleSwitch
+                        ariaLabel={t('ai_providers.config_toggle_label')}
+                        checked={!hasDisableAllModelsRule(item.excludedModels)}
+                        disabled={toggleDisabled}
+                        onChange={(value) => void onToggle(index, value)}
+                      />
+                    </span>
+                  </div>
+                </div>
                 {item.prefix && (
                   <div className={styles.fieldRow}>
                     <span className={styles.fieldLabel}>{t('common.prefix')}:</span>
@@ -176,9 +207,10 @@ export function CodexSection({
                   </div>
                 )}
                 {item.baseUrl && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.base_url')}:</span>
-                    <span className={styles.fieldValue}>{item.baseUrl}</span>
+                  <div className={`${styles.fieldRow} ${styles.openaiProviderUrlRow}`}>
+                    <span className={`${styles.fieldValue} ${styles.openaiProviderUrl}`} title={item.baseUrl}>
+                      {item.baseUrl}
+                    </span>
                   </div>
                 )}
                 {item.proxyUrl && (
@@ -228,21 +260,40 @@ export function CodexSection({
                     {testResult.message}
                   </button>
                 )}
-                {item.models?.length ? (
-                  <div className={styles.modelTagList}>
-                    <span className={styles.modelCountLabel}>
-                      {t('ai_providers.codex_models_count')}: {item.models.length}
-                    </span>
-                    {item.models.map((model) => (
-                      <span key={model.name} className={styles.modelTag}>
-                        <span className={styles.modelName}>{model.name}</span>
-                        {model.alias && model.alias !== model.name && (
-                          <span className={styles.modelAlias}>{model.alias}</span>
-                        )}
+                <div className={styles.openaiProviderResourceGrid}>
+                  <div className={styles.apiKeyEntriesSection}>
+                    <div className={styles.apiKeyEntriesSummary} title={maskApiKey(item.apiKey)}>
+                      <span className={styles.apiKeyEntriesLabel}>{t('common.api_key')}: 1</span>
+                      <span className={styles.apiKeyEntriesSummaryAction}>
+                        <IconEye size={14} />
                       </span>
-                    ))}
+                    </div>
                   </div>
-                ) : null}
+                  {item.models?.length ? (
+                    <div className={styles.modelEntriesSection}>
+                      <div className={styles.modelEntriesSummary} tabIndex={0}>
+                        <span className={styles.modelEntriesLabel}>
+                          {t('ai_providers.codex_models_count')}: {item.models.length}
+                        </span>
+                        <span className={styles.modelEntriesSummaryAction}>
+                          <IconModelCluster size={14} />
+                        </span>
+                        <div className={styles.modelEntriesHoverPanel}>
+                          <div className={styles.modelTagList}>
+                            {item.models.map((model) => (
+                              <span key={model.name} className={styles.modelTag}>
+                                <span className={styles.modelName}>{model.name}</span>
+                                {model.alias && model.alias !== model.name && (
+                                  <span className={styles.modelAlias}>{model.alias}</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
                 {excludedModels.length ? (
                   <div className={styles.excludedModelsSection}>
                     <div className={styles.excludedModelsLabel}>
@@ -257,15 +308,17 @@ export function CodexSection({
                     </div>
                   </div>
                 ) : null}
-                <div className={styles.cardStats}>
-                  <span className={`${styles.statPill} ${styles.statSuccess}`}>
-                    {t('stats.success')}: {stats.success}
-                  </span>
-                  <span className={`${styles.statPill} ${styles.statFailure}`}>
-                    {t('stats.failure')}: {stats.failure}
-                  </span>
+                <div className={styles.openaiProviderHealthRow}>
+                  <div className={styles.cardStats}>
+                    <span className={`${styles.statPill} ${styles.statSuccess}`} title={`${t('stats.success')}: ${stats.success}`}>
+                      {stats.success}
+                    </span>
+                    <span className={`${styles.statPill} ${styles.statFailure}`} title={`${t('stats.failure')}: ${stats.failure}`}>
+                      {stats.failure}
+                    </span>
+                  </div>
+                  <ProviderStatusBar statusData={statusData} />
                 </div>
-                <ProviderStatusBar statusData={statusData} />
               </Fragment>
             );
           }}
