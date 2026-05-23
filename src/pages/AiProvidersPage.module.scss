@@ -106,8 +106,32 @@ $openai-toolbar-control-height: 36px;
 }
 
 .openaiProviderTitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
   font-weight: 700;
   color: var(--text-primary);
+
+  > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.openaiProviderPriority {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .providerCardTopBar {
@@ -508,6 +532,68 @@ $openai-toolbar-control-height: 36px;
   font-family: 'Monaco', 'Menlo', 'Consolas', 'Ubuntu Mono', monospace;
 }
 
+.openaiHeaderInfoIcon {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: help;
+  flex-shrink: 0;
+  transition:
+    background-color $transition-fast,
+    border-color $transition-fast,
+    color $transition-fast;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--primary-color);
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
+    outline: none;
+  }
+}
+
+.openaiProviderTopActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.openaiProviderIconButton:global(.btn.btn-sm) {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 8px;
+
+  > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  svg {
+    display: block;
+  }
+}
+
+.openaiProviderToggleAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 38px;
+}
+
 // 自定义请求头徽章
 .headerBadgeList {
   display: flex;
@@ -564,7 +650,8 @@ $openai-toolbar-control-height: 36px;
 }
 
 .modelEntriesSection {
-  margin-top: 8px;
+  position: relative;
+  margin-top: 0;
   min-width: 0;
   max-width: 100%;
 }
@@ -576,18 +663,20 @@ $openai-toolbar-control-height: 36px;
 }
 
 .modelEntriesSummary {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: $spacing-sm;
   width: 100%;
   min-width: 0;
-  padding: 8px 10px;
+  min-height: 36px;
+  padding: 7px 10px;
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   background: var(--bg-secondary);
   color: inherit;
-  cursor: pointer;
+  cursor: default;
   text-align: left;
   transition:
     background-color $transition-fast,
@@ -692,7 +781,7 @@ $openai-toolbar-control-height: 36px;
 
 // API密钥条目列表（二级卡片）
 .apiKeyEntriesSection {
-  margin-top: 10px;
+  margin-top: 0;
   min-width: 0;
   max-width: 100%;
 }
@@ -745,7 +834,8 @@ $openai-toolbar-control-height: 36px;
   gap: $spacing-sm;
   width: 100%;
   min-width: 0;
-  padding: 8px 10px;
+  min-height: 36px;
+  padding: 7px 10px;
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   background: var(--bg-secondary);
@@ -1103,6 +1193,97 @@ $openai-toolbar-control-height: 36px;
   background: var(--bg-tertiary);
 }
 
+.openaiProviderResourceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 4px;
+  min-width: 0;
+
+  .modelTagList {
+    margin-top: 0;
+  }
+}
+
+.modelEntriesHoverPanel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: $z-dropdown;
+  display: none;
+  width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+  .modelTagList {
+    margin-top: 0;
+  }
+}
+
+.modelEntriesSummary:hover .modelEntriesHoverPanel,
+.modelEntriesSummary:focus-visible .modelEntriesHoverPanel,
+.modelEntriesSummary:focus-within .modelEntriesHoverPanel {
+  display: block;
+}
+
+.openaiProviderResourceWide {
+  grid-column: 1 / -1;
+}
+
+.openaiProviderResourceEmpty {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.openaiProviderHealthRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 4px;
+  min-width: 0;
+
+  .cardStats {
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .statPill {
+    gap: 4px;
+    padding: 5px 9px;
+    font-size: 12px;
+  }
+
+  .statusBar {
+    gap: 6px;
+    margin-top: 0;
+    padding: 0;
+    flex: 1 1 190px;
+    min-width: 190px;
+    max-width: 260px;
+  }
+
+  .statusBlocks {
+    min-width: 120px;
+  }
+
+  .statusRate {
+    padding: 4px 7px;
+  }
+}
+
 .statusRateHigh {
   color: var(--success-badge-text, #065f46);
   background: var(--success-badge-bg, #d1fae5);
@@ -1126,6 +1307,17 @@ $openai-toolbar-control-height: 36px;
 
   .statusBlocks {
     min-width: 140px;
+  }
+
+  .openaiProviderResourceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .openaiProviderHealthRow {
+    .statusBar {
+      flex-basis: 100%;
+      max-width: 100%;
+    }
   }
 }
 
