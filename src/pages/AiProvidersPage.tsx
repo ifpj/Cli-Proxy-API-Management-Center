@@ -9,7 +9,6 @@ import {
   GeminiSection,
   OpenAISection,
   VertexSection,
-  ProviderNav,
   useProviderRecentRequests,
 } from '@/components/providers';
 import {
@@ -17,6 +16,9 @@ import {
   buildGeminiGenerateContentEndpoint,
   buildOpenAIChatCompletionsEndpoint,
   DEFAULT_GEMINI_TEST_MODEL,
+  getOpenAIProviderTotalStats,
+  getProviderTotalStats,
+  hasDisableAllModelsRule,
   withDisableAllModelsRule,
   withoutDisableAllModelsRule,
 } from '@/components/providers/utils';
@@ -28,6 +30,13 @@ import { useAuthStore, useConfigStore, useNotificationStore, useThemeStore } fro
 import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
 import { buildHeaderObject, hasHeader } from '@/utils/headers';
 import styles from './AiProvidersPage.module.scss';
+import iconGemini from '@/assets/icons/gemini.svg';
+import iconCodex from '@/assets/icons/codex.svg';
+import iconClaude from '@/assets/icons/claude.svg';
+import iconVertex from '@/assets/icons/vertex.svg';
+import iconAmp from '@/assets/icons/amp.svg';
+import iconOpenaiLight from '@/assets/icons/openai-light.svg';
+import iconOpenaiDark from '@/assets/icons/openai-dark.svg';
 
 const PROVIDER_TEST_TIMEOUT_MS = 30_000;
 
@@ -49,6 +58,8 @@ type ActiveProviderTestDetail = {
   index: number;
   group?: 'success' | 'failure';
 };
+
+type ProviderTabId = 'gemini' | 'codex' | 'claude' | 'vertex' | 'ampcode' | 'openai';
 
 export function AiProvidersPage() {
   const { t } = useTranslation();
@@ -90,6 +101,8 @@ export function AiProvidersPage() {
   const [testingProvider, setTestingProvider] = useState<ProviderBatchTestKind | null>(null);
   const [activeProviderTestDetail, setActiveProviderTestDetail] =
     useState<ActiveProviderTestDetail | null>(null);
+  const [activeProviderTab, setActiveProviderTab] = useState<ProviderTabId>('openai');
+  const [providerToolbarSlot, setProviderToolbarSlot] = useState<HTMLDivElement | null>(null);
 
   const disableControls = connectionStatus !== 'connected';
   const isSwitching = Boolean(configSwitchingKey);
@@ -900,13 +913,144 @@ export function AiProvidersPage() {
           )
     : '';
 
-  return (
-    <div className={styles.container}>
-      <h1 className={styles.pageTitle}>{t('ai_providers.title')}</h1>
-      <div className={styles.content}>
-        {error && <div className="error-box">{error}</div>}
+  const providerTabs: Array<{
+    id: ProviderTabId;
+    label: string;
+    icon: string;
+  }> = [
+    {
+      id: 'openai',
+      label: t('ai_providers.openai_title'),
+      icon: resolvedTheme === 'dark' ? iconOpenaiDark : iconOpenaiLight,
+    },
+    { id: 'gemini', label: t('ai_providers.gemini_title'), icon: iconGemini },
+    { id: 'codex', label: t('ai_providers.codex_title'), icon: iconCodex },
+    { id: 'claude', label: t('ai_providers.claude_title'), icon: iconClaude },
+    { id: 'vertex', label: t('ai_providers.vertex_title'), icon: iconVertex },
+    { id: 'ampcode', label: t('ai_providers.ampcode_title'), icon: iconAmp },
+  ];
 
-        <div id="provider-gemini">
+  const getUniqueModelCount = (items: Array<{ models?: Array<{ alias?: string; name?: string }> }>) => {
+    const modelNames = new Set<string>();
+    items.forEach((item) => {
+      item.models?.forEach((model) => {
+        const modelName = (model.alias || model.name || '').trim();
+        if (modelName) {
+          modelNames.add(modelName.toLowerCase());
+        }
+      });
+    });
+    return modelNames.size;
+  };
+
+  const getProviderTotals = (
+    provider: 'gemini' | 'codex' | 'claude' | 'vertex',
+    items: ProviderKeyConfig[]
+  ) =>
+    items.reduce(
+      (total, item) => {
+        const stats = getProviderTotalStats(usageByProvider, provider, item.apiKey, item.baseUrl);
+        return {
+          success: total.success + stats.success,
+          failure: total.failure + stats.failure,
+        };
+      },
+      { success: 0, failure: 0 }
+    );
+
+  const getOpenAITotals = () =>
+    openaiProviders.reduce(
+      (total, provider) => {
+        const stats = getOpenAIProviderTotalStats(provider, usageByProvider);
+        return {
+          success: total.success + stats.success,
+          failure: total.failure + stats.failure,
+        };
+      },
+      { success: 0, failure: 0 }
+    );
+
+  const buildProviderSummary = (
+    provider: 'gemini' | 'codex' | 'claude' | 'vertex',
+    items: ProviderKeyConfig[]
+  ) => {
+    const totals = getProviderTotals(provider, items);
+    return [
+      { label: t('common.configs', { defaultValue: '配置' }), value: items.length },
+      {
+        label: t('common.enabled', { defaultValue: '启用' }),
+        value: items.filter((item) => !hasDisableAllModelsRule(item.excludedModels)).length,
+      },
+      {
+        label: t('common.api_keys', { defaultValue: '密钥' }),
+        value: items.filter((item) => item.apiKey?.trim()).length,
+      },
+      { label: t('common.models', { defaultValue: '模型' }), value: getUniqueModelCount(items) },
+      { label: t('stats.success'), value: totals.success },
+      { label: t('stats.failure'), value: totals.failure },
+    ];
+  };
+
+  const activeProviderSummary = (() => {
+    switch (activeProviderTab) {
+      case 'openai':
+        const openaiTotals = getOpenAITotals();
+        return [
+          { label: t('common.providers', { defaultValue: '提供商' }), value: openaiProviders.length },
+          {
+            label: t('common.enabled', { defaultValue: '启用' }),
+            value: openaiProviders.filter((provider) => provider.disabled !== true).length,
+          },
+          {
+            label: t('common.api_keys', { defaultValue: '密钥' }),
+            value: openaiProviders.reduce(
+              (total, provider) => total + (provider.apiKeyEntries?.length || 0),
+              0
+            ),
+          },
+          {
+            label: t('common.models', { defaultValue: '模型' }),
+            value: getUniqueModelCount(openaiProviders),
+          },
+          { label: t('stats.success'), value: openaiTotals.success },
+          { label: t('stats.failure'), value: openaiTotals.failure },
+        ];
+      case 'gemini':
+        return buildProviderSummary('gemini', geminiKeys);
+      case 'codex':
+        return buildProviderSummary('codex', codexConfigs);
+      case 'claude':
+        return buildProviderSummary('claude', claudeConfigs);
+      case 'vertex':
+        return buildProviderSummary('vertex', vertexConfigs);
+      case 'ampcode':
+        return [
+          {
+            label: t('common.enabled', { defaultValue: '启用' }),
+            value: config?.ampcode ? 1 : 0,
+          },
+          {
+            label: t('ai_providers.ampcode_upstream_url_label'),
+            value: config?.ampcode?.upstreamUrl ? 1 : 0,
+          },
+          {
+            label: t('ai_providers.ampcode_model_mappings_count'),
+            value: config?.ampcode?.modelMappings?.length || 0,
+          },
+          {
+            label: t('ai_providers.ampcode_upstream_api_keys_count'),
+            value: config?.ampcode?.upstreamApiKeys?.length || 0,
+          },
+        ];
+      default:
+        return [];
+    }
+  })();
+
+  const renderActiveProviderSection = () => {
+    switch (activeProviderTab) {
+      case 'gemini':
+        return (
           <GeminiSection
             configs={geminiKeys}
             usageByProvider={usageByProvider}
@@ -923,9 +1067,9 @@ export function AiProvidersPage() {
             onTestOne={(index) => void testSingleProviderConfig('gemini', index)}
             onOpenTestResult={(index) => setActiveProviderTestDetail({ provider: 'gemini', index })}
           />
-        </div>
-
-        <div id="provider-codex">
+        );
+      case 'codex':
+        return (
           <CodexSection
             configs={codexConfigs}
             usageByProvider={usageByProvider}
@@ -942,9 +1086,9 @@ export function AiProvidersPage() {
             onTestOne={(index) => void testSingleProviderConfig('codex', index)}
             onOpenTestResult={(index) => setActiveProviderTestDetail({ provider: 'codex', index })}
           />
-        </div>
-
-        <div id="provider-claude">
+        );
+      case 'claude':
+        return (
           <ClaudeSection
             configs={claudeConfigs}
             usageByProvider={usageByProvider}
@@ -956,9 +1100,9 @@ export function AiProvidersPage() {
             onDelete={(index) => void deleteProviderEntry('claude', index)}
             onToggle={(index, enabled) => void setConfigEnabled('claude', index, enabled)}
           />
-        </div>
-
-        <div id="provider-vertex">
+        );
+      case 'vertex':
+        return (
           <VertexSection
             configs={vertexConfigs}
             usageByProvider={usageByProvider}
@@ -970,9 +1114,9 @@ export function AiProvidersPage() {
             onDelete={deleteVertex}
             onToggle={(index, enabled) => void setConfigEnabled('vertex', index, enabled)}
           />
-        </div>
-
-        <div id="provider-ampcode">
+        );
+      case 'ampcode':
+        return (
           <AmpcodeSection
             config={config?.ampcode}
             loading={loading}
@@ -980,9 +1124,9 @@ export function AiProvidersPage() {
             isSwitching={isSwitching}
             onEdit={() => openEditor('/ai-providers/ampcode')}
           />
-        </div>
-
-        <div id="provider-openai">
+        );
+      case 'openai':
+        return (
           <OpenAISection
             configs={openaiProviders}
             usageByProvider={usageByProvider}
@@ -1000,11 +1144,58 @@ export function AiProvidersPage() {
             onOpenTestResult={(index, group) =>
               setActiveProviderTestDetail({ provider: 'openai', index, group })
             }
+            toolbarPortalTarget={activeProviderTab === 'openai' ? providerToolbarSlot : null}
           />
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className={styles.container}>
+      <h1 className={styles.pageTitle}>{t('ai_providers.title')}</h1>
+      <div className={styles.content}>
+        {error && <div className="error-box">{error}</div>}
+        <div className={styles.providerTabs}>
+          <div
+            className={styles.providerTabList}
+            role="tablist"
+            aria-label={t('ai_providers.title')}
+          >
+            {providerTabs.map((provider) => {
+              const isActive = activeProviderTab === provider.id;
+              return (
+                <button
+                  key={provider.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`${styles.providerTab} ${isActive ? styles.providerTabActive : ''}`}
+                  onClick={() => setActiveProviderTab(provider.id)}
+                >
+                  <img src={provider.icon} alt="" className={styles.providerTabIcon} />
+                  <span>{provider.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className={styles.providerToolbarRow}>
+            <div className={styles.providerSummary}>
+              {activeProviderSummary.map((item) => (
+                <span key={item.label} className={styles.providerSummaryItem}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </span>
+              ))}
+            </div>
+            <div className={styles.providerToolbarSlot} ref={setProviderToolbarSlot} />
+          </div>
+        </div>
+        <div className={styles.providerTabPanel} role="tabpanel">
+          {renderActiveProviderSection()}
         </div>
       </div>
-
-      <ProviderNav />
       <Modal
         open={Boolean(activeProviderTestDetail && activeTestResult)}
         onClose={() => setActiveProviderTestDetail(null)}

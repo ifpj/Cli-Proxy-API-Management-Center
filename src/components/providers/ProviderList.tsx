@@ -16,6 +16,7 @@ interface ProviderListProps<T> {
   actionsDisabled?: boolean;
   getRowDisabled?: (item: T, index: number) => boolean;
   renderExtraActions?: (item: T, index: number) => ReactNode;
+  hideDefaultActions?: boolean;
   listClassName?: string;
   rowClassName?: string;
   metaClassName?: string;
@@ -35,6 +36,7 @@ export function ProviderList<T>({
   actionsDisabled = false,
   getRowDisabled,
   renderExtraActions,
+  hideDefaultActions = false,
   listClassName,
   rowClassName,
   metaClassName,
@@ -61,25 +63,31 @@ export function ProviderList<T>({
             style={rowDisabled ? { opacity: 0.6 } : undefined}
           >
             <div className={metaClassName ?? 'item-meta'}>{renderContent(item, index)}</div>
-            <div className={actionsClassName ?? 'item-actions'}>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onEdit(item, index)}
-                disabled={actionsDisabled}
-              >
-                {t('common.edit')}
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => onDelete(item, index)}
-                disabled={actionsDisabled}
-              >
-                {deleteLabel || t('common.delete')}
-              </Button>
-              {renderExtraActions ? renderExtraActions(item, index) : null}
-            </div>
+            {hideDefaultActions && !renderExtraActions ? null : (
+              <div className={actionsClassName ?? 'item-actions'}>
+                {!hideDefaultActions && (
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => onEdit(item, index)}
+                      disabled={actionsDisabled}
+                    >
+                      {t('common.edit')}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => onDelete(item, index)}
+                      disabled={actionsDisabled}
+                    >
+                      {deleteLabel || t('common.delete')}
+                    </Button>
+                  </>
+                )}
+                {renderExtraActions ? renderExtraActions(item, index) : null}
+              </div>
+            )}
           </div>
         );
       })}

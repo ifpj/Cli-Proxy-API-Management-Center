@@ -77,6 +77,7 @@ interface OpenAISectionProps {
   onToggle: (index: number, enabled: boolean) => void;
   onTest: (index: number) => void;
   onOpenTestResult: (index: number, group?: 'success' | 'failure') => void;
+  toolbarPortalTarget?: HTMLElement | null;
 }
 
 interface IndexedOpenAIProvider {
@@ -110,6 +111,7 @@ export function OpenAISection({
   onToggle,
   onTest,
   onOpenTestResult,
+  toolbarPortalTarget,
 }: OpenAISectionProps) {
   const { t } = useTranslation();
   const pageTransitionLayer = usePageTransitionLayer();
@@ -133,7 +135,7 @@ export function OpenAISection({
   const topDropdownRef = useRef<HTMLDivElement>(null);
   const floatingDropdownRef = useRef<HTMLDivElement>(null);
 
-  const shouldRenderFloatingToolbar = !isTransitionAnimating && floatingToolbarStyle.visible;
+  const shouldRenderFloatingToolbar = false;
 
   useEffect(() => {
     if (isTransitionAnimating) {
@@ -591,10 +593,23 @@ export function OpenAISection({
         <div className={styles.openaiProviderMeta}>
           <div className={styles.providerCardTopBar}>
             <div className={styles.openaiProviderTitle}>
-              <span>{provider.name}</span>
+              <span title={provider.name}>{provider.name}</span>
               {provider.priority !== undefined && (
-                <span className={styles.openaiProviderPriority}>
-                  {t('common.priority')}: {provider.priority}
+                <span
+                  className={styles.openaiProviderPriority}
+                  title={`${t('common.priority')}: ${provider.priority}`}
+                >
+                  {provider.priority}
+                </span>
+              )}
+              {userAgentHeader && (
+                <span
+                  className={styles.openaiHeaderInfoIcon}
+                  title={`${userAgentHeader[0]}: ${userAgentHeader[1]}`}
+                  aria-label={`${userAgentHeader[0]}: ${userAgentHeader[1]}`}
+                  tabIndex={0}
+                >
+                  <IconInfo size={13} />
                 </span>
               )}
             </div>
@@ -716,19 +731,10 @@ export function OpenAISection({
               <span className={styles.fieldValue}>{provider.prefix}</span>
             </div>
           )}
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>{t('common.base_url')}:</span>
-            <span className={styles.fieldValue}>{provider.baseUrl}</span>
-            {userAgentHeader && (
-              <span
-                className={styles.openaiHeaderInfoIcon}
-                title={`${userAgentHeader[0]}: ${userAgentHeader[1]}`}
-                aria-label={`${userAgentHeader[0]}: ${userAgentHeader[1]}`}
-                tabIndex={0}
-              >
-                <IconInfo size={13} />
-              </span>
-            )}
+          <div className={`${styles.fieldRow} ${styles.openaiProviderUrlRow}`}>
+            <span className={`${styles.fieldValue} ${styles.openaiProviderUrl}`} title={provider.baseUrl}>
+              {provider.baseUrl}
+            </span>
           </div>
           {providerDisabled && (
             <div className="status-badge warning" style={{ marginTop: 8, marginBottom: 0 }}>
@@ -746,61 +752,19 @@ export function OpenAISection({
           )}
           <div className={styles.openaiProviderResourceGrid}>
             {apiKeyEntries.length > 0 && (
-              <div
-                className={`${styles.apiKeyEntriesSection} ${
-                  apiKeyEntries.length === 1 ? styles.openaiProviderResourceWide : ''
-                }`}
-              >
-                {apiKeyEntries.length === 1 ? (
-                  (() => {
-                    const entry = apiKeyEntries[0];
-                    const entryStats = getProviderTotalStats(
-                      usageByProvider,
-                      provider.name,
-                      entry.apiKey,
-                      provider.baseUrl
-                    );
-                    const shouldWarnKey = entryStats.success === 0 && entryStats.failure >= 3;
-                    return (
-                      <div
-                        className={`${styles.apiKeyEntryCard} ${
-                          shouldWarnKey ? styles.apiKeyEntryCardWarning : ''
-                        }`}
-                      >
-                        <span className={styles.apiKeyEntryIndex}>1</span>
-                        <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
-                        {entry.proxyUrl && (
-                          <span className={styles.apiKeyEntryProxy}>{entry.proxyUrl}</span>
-                        )}
-                        <div className={styles.apiKeyEntryStats}>
-                          <span
-                            className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
-                          >
-                            <IconCheck size={12} /> {entryStats.success}
-                          </span>
-                          <span
-                            className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
-                          >
-                            <IconX size={12} /> {entryStats.failure}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })()
-                ) : (
-                  <button
-                    type="button"
-                    className={styles.apiKeyEntriesSummary}
-                    onClick={() => setKeyModalProvider({ config: provider, originalIndex })}
-                  >
-                    <span className={styles.apiKeyEntriesLabel}>
-                      {t('ai_providers.openai_keys_count')}: {apiKeyEntries.length}
-                    </span>
-                    <span className={styles.apiKeyEntriesSummaryAction}>
-                      <IconEye size={14} />
-                    </span>
-                  </button>
-                )}
+              <div className={styles.apiKeyEntriesSection}>
+                <button
+                  type="button"
+                  className={styles.apiKeyEntriesSummary}
+                  onClick={() => setKeyModalProvider({ config: provider, originalIndex })}
+                >
+                  <span className={styles.apiKeyEntriesLabel}>
+                    {t('ai_providers.openai_keys_count')}: {apiKeyEntries.length}
+                  </span>
+                  <span className={styles.apiKeyEntriesSummaryAction}>
+                    <IconEye size={14} />
+                  </span>
+                </button>
               </div>
             )}
             {provider.models?.length ? (
@@ -842,11 +806,17 @@ export function OpenAISection({
           )}
           <div className={styles.openaiProviderHealthRow}>
             <div className={styles.cardStats}>
-              <span className={`${styles.statPill} ${styles.statSuccess}`}>
-                {t('stats.success')}: {stats.success}
+              <span
+                className={`${styles.statPill} ${styles.statSuccess}`}
+                title={`${t('stats.success')}: ${stats.success}`}
+              >
+                {stats.success}
               </span>
-              <span className={`${styles.statPill} ${styles.statFailure}`}>
-                {t('stats.failure')}: {stats.failure}
+              <span
+                className={`${styles.statPill} ${styles.statFailure}`}
+                title={`${t('stats.failure')}: ${stats.failure}`}
+              >
+                {stats.failure}
               </span>
             </div>
             <ProviderStatusBar statusData={statusData} />
@@ -862,14 +832,16 @@ export function OpenAISection({
     <>
       <div ref={sectionRef}>
         <Card
-          title={renderStaticTitle()}
+          title={toolbarPortalTarget ? undefined : renderStaticTitle()}
           extra={
-            <div
-              ref={topToolbarAnchorRef}
-              className={shouldRenderFloatingToolbar ? styles.openaiToolbarAnchorHidden : undefined}
-            >
-              {renderToolbar(false)}
-            </div>
+            toolbarPortalTarget ? undefined : (
+              <div
+                ref={topToolbarAnchorRef}
+                className={shouldRenderFloatingToolbar ? styles.openaiToolbarAnchorHidden : undefined}
+              >
+                {renderToolbar(false)}
+              </div>
+            )
           }
         >
           {loading && sortedConfigs.length === 0 ? (
@@ -899,6 +871,7 @@ export function OpenAISection({
           )}
         </Card>
       </div>
+      {toolbarPortalTarget ? createPortal(renderToolbar(false), toolbarPortalTarget) : null}
       {typeof document !== 'undefined' && shouldRenderFloatingToolbar
         ? createPortal(
             <div
