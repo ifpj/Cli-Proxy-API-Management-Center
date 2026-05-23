@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconEye, IconModelCluster, IconPencil, IconTrash2 } from '@/components/ui/icons';
+import { IconModelCluster, IconPencil, IconTrash2 } from '@/components/ui/icons';
 import iconVertex from '@/assets/icons/vertex.svg';
 import type { ProviderKeyConfig } from '@/types';
 import { maskApiKey } from '@/utils/format';
@@ -183,11 +183,9 @@ export function VertexSection({
                 )}
                 <div className={styles.openaiProviderResourceGrid}>
                   <div className={styles.apiKeyEntriesSection}>
-                    <div className={styles.apiKeyEntriesSummary} title={maskApiKey(item.apiKey)}>
-                      <span className={styles.apiKeyEntriesLabel}>{t('common.api_key')}: 1</span>
-                      <span className={styles.apiKeyEntriesSummaryAction}>
-                        <IconEye size={14} />
-                      </span>
+                    <div className={styles.singleApiKeySummary} title={item.apiKey}>
+                      <span className={styles.apiKeyEntriesLabel}>{t('common.api_key')}</span>
+                      <span className={styles.singleApiKeyValue}>{maskApiKey(item.apiKey)}</span>
                     </div>
                   </div>
                   {item.models?.length ? (
