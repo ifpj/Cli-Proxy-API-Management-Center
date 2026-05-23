@@ -142,6 +142,8 @@ export function AiProvidersOpenAIEditPage() {
     removeDraftKeyTestStatus,
     resetDraftKeyTestStatuses,
     availableModels,
+    pendingImportedKeyScrollIndex,
+    consumeImportedKeyScrollIndex,
     handleBack,
     handleSave,
   } = useOutletContext<OpenAIEditOutletContext>();
@@ -155,6 +157,14 @@ export function AiProvidersOpenAIEditPage() {
   const [activeTestDetailIndex, setActiveTestDetailIndex] = useState<number | null>(null);
   const [bulkKeysOpen, setBulkKeysOpen] = useState(false);
   const [bulkKeysText, setBulkKeysText] = useState('');
+  const [pendingScrollKeyIndex, setPendingScrollKeyIndex] = useState<number | null>(null);
+  const keyRowRefs = useRef(new Map<number, HTMLDivElement>());
+  const pendingScrollDelayMsRef = useRef(0);
+
+  const queueKeyRowScroll = useCallback((index: number, delayMs = 0) => {
+    pendingScrollDelayMsRef.current = delayMs;
+    setPendingScrollKeyIndex(index);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -165,6 +175,50 @@ export function AiProvidersOpenAIEditPage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleBack]);
+
+  useEffect(() => {
+    if (pendingScrollKeyIndex === null) return;
+    let cancelled = false;
+    let animationFrameId: number | null = null;
+    let timeoutId: number | null = null;
+
+    const scrollToRow = (attempt = 0) => {
+      if (cancelled) return;
+      const row = keyRowRefs.current.get(pendingScrollKeyIndex);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        pendingScrollDelayMsRef.current = 0;
+        setPendingScrollKeyIndex(null);
+        return;
+      }
+      if (attempt < 3) {
+        timeoutId = window.setTimeout(() => scrollToRow(attempt + 1), 50);
+      }
+    };
+
+    const startScroll = () => {
+      animationFrameId = requestAnimationFrame(() => scrollToRow());
+    };
+
+    const delayMs = pendingScrollDelayMsRef.current;
+    if (delayMs > 0) {
+      timeoutId = window.setTimeout(startScroll, delayMs);
+    } else {
+      startScroll();
+    }
+
+    return () => {
+      cancelled = true;
+      if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [form.apiKeyEntries.length, pendingScrollKeyIndex]);
+
+  useEffect(() => {
+    if (pendingImportedKeyScrollIndex === null) return;
+    queueKeyRowScroll(pendingImportedKeyScrollIndex);
+    consumeImportedKeyScrollIndex();
+  }, [consumeImportedKeyScrollIndex, pendingImportedKeyScrollIndex, queueKeyRowScroll]);
 
   const canSave =
     !disableControls &&
@@ -507,7 +561,17 @@ export function AiProvidersOpenAIEditPage() {
             );
 
             return (
-              <div key={index} className={styles.keyTableRow}>
+              <div
+                key={index}
+                ref={(node) => {
+                  if (node) {
+                    keyRowRefs.current.set(index, node);
+                  } else {
+                    keyRowRefs.current.delete(index);
+                  }
+                }}
+                className={styles.keyTableRow}
+              >
                 {/* 序号 */}
                 <div className={styles.keyTableColIndex}>{index + 1}</div>
 
@@ -659,6 +723,7 @@ export function AiProvidersOpenAIEditPage() {
         (entry) => entry.apiKey.trim() || entry.proxyUrl?.trim()
       );
       const next = [...baseEntries, ...nextKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))];
+      queueKeyRowScroll(next.length - 1);
       setForm((prev) => ({ ...prev, apiKeyEntries: next }));
       resetDraftKeyTestStatuses(next.length);
       setTestStatus('idle');
@@ -674,6 +739,7 @@ export function AiProvidersOpenAIEditPage() {
     },
     [
       form.apiKeyEntries,
+      queueKeyRowScroll,
       resetDraftKeyTestStatuses,
       setForm,
       setTestMessage,
