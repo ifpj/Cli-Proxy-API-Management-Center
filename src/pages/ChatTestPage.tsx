@@ -802,7 +802,7 @@ export function ChatTestPage() {
             )}
             {status && <div className={`status-badge ${status.type}`}>{status.text}</div>}
             {rawResponse && (
-              <div className={styles.field}>
+              <div className={`${styles.field} ${styles.rawResponseField}`}>
                 <span className={styles.fieldLabel}>
                   {t('chat_test.raw_response', { defaultValue: '原始响应' })}
                 </span>
