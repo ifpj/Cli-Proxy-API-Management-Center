@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconPlay, IconTrash2 } from '@/components/ui/icons';
+import { IconDownload, IconPlay, IconTrash2, IconX } from '@/components/ui/icons';
 import { apiCallApi, getApiCallErrorMessage } from '@/services/api';
 import { apiKeysApi } from '@/services/api/apiKeys';
 import { useAuthStore, useConfigStore, useModelsStore, useNotificationStore } from '@/stores';
@@ -15,6 +15,13 @@ const CHAT_TEST_TIMEOUT_MS = 45_000;
 type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
+  images?: ChatImage[];
+};
+
+type ChatImage = {
+  name: string;
+  type: string;
+  dataUrl: string;
 };
 
 const normalizeApiKeyList = (input: unknown): string[] => {
@@ -97,6 +104,39 @@ const formatRawBody = (body: unknown, bodyText: string): string => {
 
 const modelLabel = (model: ModelInfo) => (model.alias ? `${model.name} (${model.alias})` : model.name);
 
+const readImageFile = (file: File): Promise<ChatImage> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!dataUrl) {
+        reject(new Error('Failed to read image'));
+        return;
+      }
+      resolve({
+        name: file.name,
+        type: file.type || 'image/*',
+        dataUrl,
+      });
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read image'));
+    reader.readAsDataURL(file);
+  });
+
+const toApiMessageContent = (message: ChatMessage) => {
+  if (message.role !== 'user' || !message.images?.length) {
+    return message.content;
+  }
+
+  return [
+    { type: 'text', text: message.content || 'Please analyze the attached image.' },
+    ...message.images.map((image) => ({
+      type: 'image_url',
+      image_url: { url: image.dataUrl },
+    })),
+  ];
+};
+
 export function ChatTestPage() {
   const { t, i18n } = useTranslation();
   const { showNotification } = useNotificationStore();
@@ -108,12 +148,14 @@ export function ChatTestPage() {
 
   const [selectedModel, setSelectedModel] = useState('');
   const [input, setInput] = useState('');
+  const [selectedImages, setSelectedImages] = useState<ChatImage[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [includeHistory, setIncludeHistory] = useState(true);
   const [status, setStatus] = useState<{ type: 'success' | 'warning' | 'error' | 'muted'; text: string }>();
   const [rawResponse, setRawResponse] = useState('');
   const [sending, setSending] = useState(false);
   const apiKeysCache = useRef<string[]>([]);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const modelOptions = useMemo(
     () => models.map((model) => ({ value: model.name, label: modelLabel(model) })),
@@ -181,7 +223,7 @@ export function ChatTestPage() {
       return;
     }
 
-    if (!content) {
+    if (!content && selectedImages.length === 0) {
       const text = t('chat_test.message_required', { defaultValue: '请输入测试消息' });
       setStatus({ type: 'warning', text });
       showNotification(text, 'warning');
@@ -207,10 +249,19 @@ export function ChatTestPage() {
         throw new Error(t('chat_test.api_key_required', { defaultValue: '未找到可用的代理 API Key' }));
       }
 
-      const nextMessages: ChatMessage[] = [...messages, { role: 'user', content }];
-      const requestMessages = includeHistory ? nextMessages : [{ role: 'user' as const, content }];
+      const userMessage: ChatMessage = {
+        role: 'user',
+        content,
+        images: selectedImages.length ? selectedImages : undefined,
+      };
+      const nextMessages: ChatMessage[] = [...messages, userMessage];
+      const requestMessages = includeHistory ? nextMessages : [userMessage];
       setMessages(nextMessages);
       setInput('');
+      setSelectedImages([]);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
 
       const result = await apiCallApi.request(
         {
@@ -224,7 +275,7 @@ export function ChatTestPage() {
             model,
             messages: requestMessages.map((message) => ({
               role: message.role,
-              content: message.content,
+              content: toApiMessageContent(message),
             })),
             stream: false,
           }),
@@ -256,8 +307,32 @@ export function ChatTestPage() {
 
   const clearMessages = () => {
     setMessages([]);
+    setSelectedImages([]);
     setRawResponse('');
     setStatus(undefined);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  };
+
+  const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []).filter((file) =>
+      file.type.startsWith('image/')
+    );
+    if (!files.length) return;
+
+    try {
+      const images = await Promise.all(files.map(readImageFile));
+      setSelectedImages((current) => [...current, ...images]);
+    } catch (error: unknown) {
+      const text = error instanceof Error ? error.message : String(error || '');
+      setStatus({ type: 'error', text });
+      showNotification(text, 'error');
+    }
+  };
+
+  const removeSelectedImage = (index: number) => {
+    setSelectedImages((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
   return (
@@ -297,7 +372,19 @@ export function ChatTestPage() {
                       ? t('chat_test.user', { defaultValue: '用户' })
                       : t('chat_test.assistant', { defaultValue: '助手' })}
                   </span>
-                  <div className={styles.bubble}>{message.content}</div>
+                  {message.content && <div className={styles.bubble}>{message.content}</div>}
+                  {message.images?.length ? (
+                    <div className={styles.messageImages}>
+                      {message.images.map((image, imageIndex) => (
+                        <img
+                          key={`${image.name}-${imageIndex}`}
+                          src={image.dataUrl}
+                          alt={image.name}
+                          className={styles.messageImage}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ))
             )}
@@ -318,6 +405,54 @@ export function ChatTestPage() {
                 })}
                 disabled={sending}
               />
+              <div className={styles.imageToolbar}>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className={styles.fileInput}
+                  onChange={(event) => void handleImageChange(event)}
+                  disabled={sending}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={sending}
+                >
+                  <IconDownload size={14} />
+                  {t('chat_test.add_image', { defaultValue: '添加图片' })}
+                </Button>
+                {selectedImages.length > 0 && (
+                  <span className={styles.metaLine}>
+                    {t('chat_test.image_count', {
+                      count: selectedImages.length,
+                      defaultValue: '已选 {{count}} 张图片',
+                    })}
+                  </span>
+                )}
+              </div>
+              {selectedImages.length > 0 && (
+                <div className={styles.imagePreviewGrid}>
+                  {selectedImages.map((image, index) => (
+                    <div key={`${image.name}-${index}`} className={styles.imagePreview}>
+                      <img src={image.dataUrl} alt={image.name} />
+                      <button
+                        type="button"
+                        className={styles.removeImage}
+                        onClick={() => removeSelectedImage(index)}
+                        aria-label={t('common.delete')}
+                        disabled={sending}
+                      >
+                        <IconX size={14} />
+                      </button>
+                      <span title={image.name}>{image.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className={styles.actions}>
               <Button onClick={() => void handleSend()} loading={sending}>

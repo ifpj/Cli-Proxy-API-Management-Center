@@ -64,6 +64,74 @@
   resize: vertical;
 }
 
+.imageToolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.fileInput {
+  display: none;
+}
+
+.imagePreviewGrid,
+.messageImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.imagePreview {
+  position: relative;
+  display: grid;
+  grid-template-rows: 96px auto;
+  gap: 4px;
+  width: 112px;
+  padding: 6px;
+  border-radius: $radius-md;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+
+  img {
+    width: 100%;
+    height: 96px;
+    object-fit: cover;
+    border-radius: calc($radius-md - 2px);
+  }
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+}
+
+.removeImage {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  border-radius: $radius-full;
+  background: color-mix(in srgb, var(--bg-primary) 90%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-primary);
+  }
+}
+
 .messages {
   display: flex;
   flex-direction: column;
@@ -105,6 +173,15 @@
 
 .messageAssistant {
   align-self: flex-start;
+}
+
+.messageImage {
+  width: min(180px, 42vw);
+  height: 128px;
+  object-fit: cover;
+  border-radius: $radius-md;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .role {
