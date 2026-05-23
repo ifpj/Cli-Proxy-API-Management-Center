@@ -414,7 +414,7 @@ export function OpenAISection({
 
   const handleSortOptionChange = (value: SortOption) => {
     setSortOption(value);
-    if (value === 'recent-success' || value === 'total-success') {
+    if (value === 'priority' || value === 'recent-success' || value === 'total-success') {
       setSortDirection('desc');
     }
   };
