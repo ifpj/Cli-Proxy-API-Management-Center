@@ -1870,6 +1870,13 @@ $openai-toolbar-control-height: 36px;
   margin-bottom: 0;
 }
 
+.keyEntriesHeaderText {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 .keyEntriesTitle {
   display: block;
   margin: 0;
@@ -1882,6 +1889,31 @@ $openai-toolbar-control-height: 36px;
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-secondary);
+}
+
+.pasteProxyControl {
+  display: block;
+  flex: 0 1 340px;
+  max-width: 340px;
+  min-width: 220px;
+  margin: 0 auto;
+}
+
+.pasteProxyInput {
+  width: 100%;
+  height: 38px;
+  min-width: 0;
+  padding: 0 12px;
+  font-size: 14px;
+  line-height: 38px;
+}
+
+@include mobile {
+  .pasteProxyControl {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+  }
 }
 
 .keyEntriesList {

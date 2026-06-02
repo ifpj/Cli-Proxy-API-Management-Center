@@ -40,6 +40,8 @@ export type OpenAIEditOutletContext = {
   testMessage: string;
   setTestMessage: Dispatch<SetStateAction<string>>;
   keyTestStatuses: KeyTestStatus[];
+  pasteProxyUrl: string;
+  setPasteProxyUrl: Dispatch<SetStateAction<string>>;
   setDraftKeyTestStatus: (keyIndex: number, status: KeyTestStatus) => void;
   removeDraftKeyTestStatus: (keyIndex: number) => void;
   resetDraftKeyTestStatuses: (count: number) => void;
@@ -208,12 +210,14 @@ export function AiProvidersOpenAIEditLayout() {
   const setDraftKeyTestStatus = useOpenAIEditDraftStore((state) => state.setDraftKeyTestStatus);
   const removeDraftKeyTestStatus = useOpenAIEditDraftStore((state) => state.removeDraftKeyTestStatus);
   const resetDraftKeyTestStatuses = useOpenAIEditDraftStore((state) => state.resetDraftKeyTestStatuses);
+  const setDraftPasteProxyUrl = useOpenAIEditDraftStore((state) => state.setDraftPasteProxyUrl);
 
   const form = draft?.form ?? buildEmptyForm();
   const testModel = draft?.testModel ?? '';
   const testStatus = draft?.testStatus ?? 'idle';
   const testMessage = draft?.testMessage ?? '';
   const keyTestStatuses = draft?.keyTestStatuses ?? [];
+  const pasteProxyUrl = draft?.pasteProxyUrl ?? '';
 
   const setForm: Dispatch<SetStateAction<OpenAIFormState>> = useCallback(
     (action) => {
@@ -263,6 +267,13 @@ export function AiProvidersOpenAIEditLayout() {
       removeDraftKeyTestStatus(draftKey, keyIndex);
     },
     [draftKey, removeDraftKeyTestStatus]
+  );
+
+  const setPasteProxyUrl: Dispatch<SetStateAction<string>> = useCallback(
+    (action) => {
+      setDraftPasteProxyUrl(draftKey, action);
+    },
+    [draftKey, setDraftPasteProxyUrl]
   );
 
   const initialData = useMemo(() => {
@@ -364,6 +375,7 @@ export function AiProvidersOpenAIEditLayout() {
         testStatus: 'idle',
         testMessage: '',
         keyTestStatuses: [],
+        pasteProxyUrl: '',
       });
       if (pastePrefill?.apiKeys?.length) {
         if (mergedKeys.addedCount > 0) {
@@ -393,6 +405,7 @@ export function AiProvidersOpenAIEditLayout() {
         testStatus: 'idle',
         testMessage: '',
         keyTestStatuses: [],
+        pasteProxyUrl: '',
       });
       if (mergedKeys.addedCount > 0) {
         setPendingImportedKeyScrollIndex(mergedKeys.entries.length - 1);
@@ -619,6 +632,8 @@ export function AiProvidersOpenAIEditLayout() {
         testMessage,
         setTestMessage,
         keyTestStatuses,
+        pasteProxyUrl,
+        setPasteProxyUrl,
         setDraftKeyTestStatus: handleSetDraftKeyTestStatus,
         removeDraftKeyTestStatus: handleRemoveDraftKeyTestStatus,
         resetDraftKeyTestStatuses: handleResetDraftKeyTestStatuses,

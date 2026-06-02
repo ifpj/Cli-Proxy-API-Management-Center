@@ -45,6 +45,7 @@ export type OpenAIEditDraft = {
   testStatus: OpenAITestStatus;
   testMessage: string;
   keyTestStatuses: KeyTestStatus[];
+  pasteProxyUrl: string;
 };
 
 interface OpenAIEditDraftState {
@@ -62,6 +63,7 @@ interface OpenAIEditDraftState {
   setDraftKeyTestStatus: (draftKey: string, keyIndex: number, status: KeyTestStatus) => void;
   removeDraftKeyTestStatus: (draftKey: string, keyIndex: number) => void;
   resetDraftKeyTestStatuses: (draftKey: string, count: number) => void;
+  setDraftPasteProxyUrl: (key: string, action: SetStateAction<string>) => void;
   clearDraft: (key: string) => void;
 }
 
@@ -86,6 +88,7 @@ const buildEmptyDraft = (): OpenAIEditDraft => ({
   testStatus: 'idle',
   testMessage: '',
   keyTestStatuses: [],
+  pasteProxyUrl: '',
 });
 
 export const useOpenAIEditDraftStore = create<OpenAIEditDraftState>((set, get) => ({
@@ -251,6 +254,20 @@ export const useOpenAIEditDraftStore = create<OpenAIEditDraftState>((set, get) =
             initialized: true,
             keyTestStatuses: Array.from({ length: count }, () => ({ status: 'idle', message: '' })),
           },
+        },
+      };
+    });
+  },
+
+  setDraftPasteProxyUrl: (key, action) => {
+    if (!key) return;
+    set((state) => {
+      const existing = state.drafts[key] ?? buildEmptyDraft();
+      const nextValue = resolveAction(action, existing.pasteProxyUrl);
+      return {
+        drafts: {
+          ...state.drafts,
+          [key]: { ...existing, initialized: true, pasteProxyUrl: nextValue },
         },
       };
     });

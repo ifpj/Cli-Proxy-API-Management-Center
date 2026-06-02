@@ -148,6 +148,8 @@ export function AiProvidersOpenAIEditPage() {
     testMessage,
     setTestMessage,
     keyTestStatuses,
+    pasteProxyUrl,
+    setPasteProxyUrl,
     setDraftKeyTestStatus,
     removeDraftKeyTestStatus,
     resetDraftKeyTestStatuses,
@@ -723,6 +725,14 @@ export function AiProvidersOpenAIEditPage() {
     );
   }, [form.apiKeyEntries, keyTestStatuses, showNotification, t]);
 
+  const buildImportedApiKeyEntry = useCallback(
+    (apiKey: string) => {
+      const proxyUrl = pasteProxyUrl.trim();
+      return buildApiKeyEntry({ apiKey, proxyUrl });
+    },
+    [pasteProxyUrl]
+  );
+
   const renderKeyEntries = (entries: ApiKeyEntry[]) => {
     const list = entries.length ? entries : [buildApiKeyEntry()];
 
@@ -756,6 +766,21 @@ export function AiProvidersOpenAIEditPage() {
           <span className={styles.keyEntriesCount}>
             {t('ai_providers.openai_keys_count')}: {list.length}
           </span>
+          <label className={styles.pasteProxyControl}>
+            <input
+              type="text"
+              value={pasteProxyUrl}
+              onChange={(event) => setPasteProxyUrl(event.target.value)}
+              disabled={saving || disableControls || isTestingKeys}
+              className={`input ${styles.pasteProxyInput}`}
+              placeholder={t('ai_providers.openai_keys_paste_proxy_placeholder', {
+                defaultValue: '粘贴时使用代理 URL（如 socks5://...）',
+              })}
+              aria-label={t('ai_providers.openai_keys_paste_proxy_label', {
+                defaultValue: '粘贴时使用代理',
+              })}
+            />
+          </label>
           <div className={styles.keyEntriesActions}>
             <Button
               variant="secondary"
@@ -946,15 +971,21 @@ export function AiProvidersOpenAIEditPage() {
     const baseEntries = currentEntries.filter(
       (entry) => entry.apiKey.trim() || entry.proxyUrl?.trim()
     );
-    const next = [...baseEntries, ...nextKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))];
+    const next = [...baseEntries, ...nextKeys.map(buildImportedApiKeyEntry)];
     setForm((prev) => ({ ...prev, apiKeyEntries: next }));
     resetDraftKeyTestStatuses(next.length);
     setTestStatus('idle');
     setTestMessage('');
     setBulkKeysText('');
     setBulkKeysOpen(false);
+    const appliedProxy = pasteProxyUrl.trim();
     showNotification(
-      t('ai_providers.openai_keys_bulk_added', { count: nextKeys.length }),
+      appliedProxy
+        ? t('ai_providers.openai_keys_bulk_added_with_proxy', {
+            defaultValue: '已添加 {{count}} 个新密钥，并应用代理',
+            count: nextKeys.length,
+          })
+        : t('ai_providers.openai_keys_bulk_added', { count: nextKeys.length }),
       'success'
     );
   };
@@ -983,7 +1014,7 @@ export function AiProvidersOpenAIEditPage() {
       const baseEntries = currentEntries.filter(
         (entry) => entry.apiKey.trim() || entry.proxyUrl?.trim()
       );
-      const next = [...baseEntries, ...nextKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))];
+      const next = [...baseEntries, ...nextKeys.map(buildImportedApiKeyEntry)];
       queueKeyRowScroll(next.length - 1);
       setForm((prev) => ({ ...prev, apiKeyEntries: next }));
       resetDraftKeyTestStatuses(next.length);
@@ -992,14 +1023,22 @@ export function AiProvidersOpenAIEditPage() {
       setBulkKeysText('');
       setBulkKeysOpen(false);
       setActiveTestDetailIndex(null);
+      const appliedProxy = pasteProxyUrl.trim();
       showNotification(
-        t('ai_providers.openai_keys_bulk_added', { count: nextKeys.length }),
+        appliedProxy
+          ? t('ai_providers.openai_keys_bulk_added_with_proxy', {
+              defaultValue: '已添加 {{count}} 个新密钥，并应用代理',
+              count: nextKeys.length,
+            })
+          : t('ai_providers.openai_keys_bulk_added', { count: nextKeys.length }),
         'success'
       );
       return true;
     },
     [
       form.apiKeyEntries,
+      buildImportedApiKeyEntry,
+      pasteProxyUrl,
       queueKeyRowScroll,
       resetDraftKeyTestStatuses,
       setForm,
@@ -1263,12 +1302,14 @@ export function AiProvidersOpenAIEditPage() {
 
               <div className={styles.keyEntriesSection}>
                 <div className={styles.keyEntriesHeader}>
-                  <label className={styles.keyEntriesTitle}>
-                    {t('ai_providers.openai_add_modal_keys_label')}
-                  </label>
-                  <span className={styles.keyEntriesHint}>
-                    {t('ai_providers.openai_keys_hint')}
-                  </span>
+                  <div className={styles.keyEntriesHeaderText}>
+                    <label className={styles.keyEntriesTitle}>
+                      {t('ai_providers.openai_add_modal_keys_label')}
+                    </label>
+                    <span className={styles.keyEntriesHint}>
+                      {t('ai_providers.openai_keys_hint')}
+                    </span>
+                  </div>
                 </div>
                 {renderKeyEntries(form.apiKeyEntries)}
               </div>
