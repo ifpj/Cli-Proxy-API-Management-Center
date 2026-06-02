@@ -13,6 +13,7 @@ import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { useNotificationStore } from '@/stores';
 import { apiCallApi, getApiCallErrorMessage } from '@/services/api';
 import type { ApiKeyEntry } from '@/types';
+import { copyToClipboard } from '@/utils/clipboard';
 import { buildHeaderObject, hasHeader } from '@/utils/headers';
 import { buildApiKeyEntry, buildOpenAIChatCompletionsEndpoint } from '@/components/providers/utils';
 import type { OpenAIEditOutletContext } from './AiProvidersOpenAIEditLayout';
@@ -691,6 +692,37 @@ export function AiProvidersOpenAIEditPage() {
     resetDraftKeyTestStatuses(form.apiKeyEntries.length);
   };
 
+  const exportApiKeys = useCallback(async () => {
+    const lines = form.apiKeyEntries.reduce<string[]>((acc, entry, index) => {
+      const apiKey = entry.apiKey.trim();
+      if (!apiKey) return acc;
+      const isUnavailable = keyTestStatuses[index]?.status === 'error';
+      acc.push(isUnavailable ? `#${apiKey}` : apiKey);
+      return acc;
+    }, []);
+
+    if (lines.length === 0) {
+      showNotification(
+        t('ai_providers.openai_keys_export_empty', {
+          defaultValue: '没有可导出的密钥',
+        }),
+        'warning'
+      );
+      return;
+    }
+
+    const copied = await copyToClipboard(`${lines.join('\n')}\n`);
+    showNotification(
+      copied
+        ? t('ai_providers.openai_keys_export_success', {
+            defaultValue: '已复制 {{count}} 个密钥到剪贴板',
+            count: lines.length,
+          })
+        : t('notification.copy_failed', { defaultValue: '复制失败' }),
+      copied ? 'success' : 'error'
+    );
+  }, [form.apiKeyEntries, keyTestStatuses, showNotification, t]);
+
   const renderKeyEntries = (entries: ApiKeyEntry[]) => {
     const list = entries.length ? entries : [buildApiKeyEntry()];
 
@@ -744,6 +776,18 @@ export function AiProvidersOpenAIEditPage() {
               className={styles.reorderKeysButton}
             >
               {t('ai_providers.openai_keys_reorder_action', { defaultValue: '自动重排' })}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void exportApiKeys()}
+              disabled={saving || disableControls || isTestingKeys || !hasTestableKeys}
+              title={t('ai_providers.openai_keys_export_hint', {
+                defaultValue: '复制所有密钥到剪贴板，每行一个；不可用密钥会以 # 注释',
+              })}
+              className={styles.exportKeysButton}
+            >
+              {t('ai_providers.openai_keys_export_action', { defaultValue: '导出密钥' })}
             </Button>
             <Button
               variant="secondary"
