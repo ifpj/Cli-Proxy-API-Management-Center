@@ -1904,6 +1904,14 @@ $openai-toolbar-control-height: 36px;
   color: var(--text-secondary);
 }
 
+.keyEntriesActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $spacing-xs;
+  flex-wrap: wrap;
+}
+
 .bulkKeysModalBody {
   display: flex;
   flex-direction: column;
@@ -2075,6 +2083,11 @@ $openai-toolbar-control-height: 36px;
 }
 
 .addKeyButton {
+  align-self: auto;
+  margin-top: 0;
+}
+
+.reorderKeysButton {
   align-self: auto;
   margin-top: 0;
 }

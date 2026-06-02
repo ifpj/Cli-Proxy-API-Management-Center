@@ -112,6 +112,15 @@ const parseBulkApiKeysText = (text: string) =>
     .map((key) => key.trim())
     .filter((key) => key && !/^https?:\/\//i.test(key));
 
+const buildIdleKeyTestStatus = (): KeyTestStatus => ({ status: 'idle', message: '' });
+
+const getKeyReorderRank = (entry: ApiKeyEntry, status: KeyTestStatus) => {
+  if (!entry.apiKey?.trim()) return 2;
+  if (status.status === 'success') return 0;
+  if (status.status === 'error') return 2;
+  return 1;
+};
+
 const isEditablePasteTarget = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -154,6 +163,7 @@ export function AiProvidersOpenAIEditPage() {
 
   const swipeRef = useEdgeSwipeBack({ onBack: handleBack });
   const [isTestingKeys, setIsTestingKeys] = useState(false);
+  const [isReorderingKeys, setIsReorderingKeys] = useState(false);
   const [activeTestDetailIndex, setActiveTestDetailIndex] = useState<number | null>(null);
   const [bulkKeysOpen, setBulkKeysOpen] = useState(false);
   const [bulkKeysText, setBulkKeysText] = useState('');
@@ -272,32 +282,45 @@ export function AiProvidersOpenAIEditPage() {
 
   // Test a single key by index
   const runSingleKeyTest = useCallback(
-    async (keyIndex: number): Promise<boolean> => {
+    async (keyIndex: number): Promise<KeyTestStatus> => {
       const baseUrl = form.baseUrl.trim();
       if (!baseUrl) {
-        showNotification(t('notification.openai_test_url_required'), 'error');
-        return false;
+        const status: KeyTestStatus = {
+          status: 'error',
+          message: t('notification.openai_test_url_required'),
+        };
+        showNotification(status.message, 'error');
+        return status;
       }
 
       const endpoint = buildOpenAIChatCompletionsEndpoint(baseUrl);
       if (!endpoint) {
-        showNotification(t('notification.openai_test_url_required'), 'error');
-        return false;
+        const status: KeyTestStatus = {
+          status: 'error',
+          message: t('notification.openai_test_url_required'),
+        };
+        showNotification(status.message, 'error');
+        return status;
       }
 
       const keyEntry = form.apiKeyEntries[keyIndex];
       if (!keyEntry?.apiKey?.trim()) {
-        setDraftKeyTestStatus(keyIndex, {
+        const status: KeyTestStatus = {
           status: 'error',
           message: t('notification.openai_test_key_required'),
-        });
-        return false;
+        };
+        setDraftKeyTestStatus(keyIndex, status);
+        return status;
       }
 
       const modelName = testModel.trim() || availableModels[0] || '';
       if (!modelName) {
-        showNotification(t('notification.openai_test_model_required'), 'error');
-        return false;
+        const status: KeyTestStatus = {
+          status: 'error',
+          message: t('notification.openai_test_model_required'),
+        };
+        showNotification(status.message, 'error');
+        return status;
       }
 
       const customHeaders = buildHeaderObject(form.headers);
@@ -334,22 +357,24 @@ export function AiProvidersOpenAIEditPage() {
         );
 
         if (result.statusCode < 200 || result.statusCode >= 300) {
-          setDraftKeyTestStatus(keyIndex, {
+          const status: KeyTestStatus = {
             status: 'error',
             message: getApiCallErrorMessage(result),
             responseStatusCode: result.statusCode,
             responseBodyText,
-          });
-          return false;
+          };
+          setDraftKeyTestStatus(keyIndex, status);
+          return status;
         }
 
-        setDraftKeyTestStatus(keyIndex, {
+        const status: KeyTestStatus = {
           status: 'success',
           message: '',
           responseStatusCode: result.statusCode,
           responseBodyText,
-        });
-        return true;
+        };
+        setDraftKeyTestStatus(keyIndex, status);
+        return status;
       } catch (err: unknown) {
         const message = getErrorMessage(err);
         const errorCode =
@@ -360,8 +385,9 @@ export function AiProvidersOpenAIEditPage() {
         const errorMessage = isTimeout
           ? t('ai_providers.openai_test_timeout', { seconds: OPENAI_TEST_TIMEOUT_MS / 1000 })
           : message;
-        setDraftKeyTestStatus(keyIndex, { status: 'error', message: errorMessage });
-        return false;
+        const status: KeyTestStatus = { status: 'error', message: errorMessage };
+        setDraftKeyTestStatus(keyIndex, status);
+        return status;
       }
     },
     [
@@ -381,7 +407,8 @@ export function AiProvidersOpenAIEditPage() {
       if (isTestingKeys) return false;
       setIsTestingKeys(true);
       try {
-        return await runSingleKeyTest(keyIndex);
+        const result = await runSingleKeyTest(keyIndex);
+        return result.status === 'success';
       } finally {
         setIsTestingKeys(false);
       }
@@ -440,7 +467,7 @@ export function AiProvidersOpenAIEditPage() {
     try {
       const results = await Promise.all(validKeyIndexes.map((index) => runSingleKeyTest(index)));
 
-      const successCount = results.filter(Boolean).length;
+      const successCount = results.filter((result) => result.status === 'success').length;
       const failCount = validKeyIndexes.length - successCount;
 
       if (failCount === 0) {
@@ -477,6 +504,174 @@ export function AiProvidersOpenAIEditPage() {
     resetDraftKeyTestStatuses,
     runSingleKeyTest,
     showNotification,
+  ]);
+
+  const reorderKeyEntriesByStatus = useCallback(
+    (statusesByIndex: KeyTestStatus[]) => {
+      const currentEntries = form.apiKeyEntries.length
+        ? form.apiKeyEntries
+        : [buildApiKeyEntry()];
+      const items = currentEntries.map((entry, originalIndex) => ({
+        entry,
+        originalIndex,
+        status:
+          statusesByIndex[originalIndex] ??
+          keyTestStatuses[originalIndex] ??
+          buildIdleKeyTestStatus(),
+      }));
+      const reorderedItems = [...items].sort((a, b) => {
+        const rankDiff =
+          getKeyReorderRank(a.entry, a.status) - getKeyReorderRank(b.entry, b.status);
+        if (rankDiff !== 0) return rankDiff;
+        return a.originalIndex - b.originalIndex;
+      });
+      const changed = reorderedItems.some((item, index) => item.originalIndex !== index);
+      if (!changed) return false;
+
+      const nextStatuses = reorderedItems.map((item) => item.status);
+      setForm((prev) => ({
+        ...prev,
+        apiKeyEntries: reorderedItems.map((item) => item.entry),
+      }));
+      resetDraftKeyTestStatuses(nextStatuses.length);
+      nextStatuses.forEach((status, index) => {
+        setDraftKeyTestStatus(index, status);
+      });
+      setActiveTestDetailIndex(null);
+      queueKeyRowScroll(0, 120);
+      return true;
+    },
+    [
+      form.apiKeyEntries,
+      keyTestStatuses,
+      queueKeyRowScroll,
+      resetDraftKeyTestStatuses,
+      setDraftKeyTestStatus,
+      setForm,
+    ]
+  );
+
+  const reorderKeysByAvailability = useCallback(async () => {
+    if (isTestingKeys) return;
+
+    const currentEntries = form.apiKeyEntries.length
+      ? form.apiKeyEntries
+      : [buildApiKeyEntry()];
+    if (currentEntries.length <= 1) {
+      showNotification(
+        t('ai_providers.openai_keys_reorder_unchanged', {
+          defaultValue: '密钥顺序已是可用在上、不可用在下',
+        }),
+        'info'
+      );
+      return;
+    }
+
+    const baseUrl = form.baseUrl.trim();
+    if (!baseUrl) {
+      const message = t('notification.openai_test_url_required');
+      setTestStatus('error');
+      setTestMessage(message);
+      showNotification(message, 'error');
+      return;
+    }
+
+    const endpoint = buildOpenAIChatCompletionsEndpoint(baseUrl);
+    if (!endpoint) {
+      const message = t('notification.openai_test_url_required');
+      setTestStatus('error');
+      setTestMessage(message);
+      showNotification(message, 'error');
+      return;
+    }
+
+    const modelName = testModel.trim() || availableModels[0] || '';
+    if (!modelName) {
+      const message = t('notification.openai_test_model_required');
+      setTestStatus('error');
+      setTestMessage(message);
+      showNotification(message, 'error');
+      return;
+    }
+
+    const validKeyIndexes = currentEntries
+      .map((entry, index) => (entry.apiKey?.trim() ? index : -1))
+      .filter((index) => index >= 0);
+    if (validKeyIndexes.length === 0) {
+      const message = t('notification.openai_test_key_required');
+      setTestStatus('error');
+      setTestMessage(message);
+      showNotification(message, 'error');
+      return;
+    }
+
+    setIsTestingKeys(true);
+    setIsReorderingKeys(true);
+    setTestStatus('loading');
+    setTestMessage(
+      t('ai_providers.openai_keys_reorder_running', {
+        defaultValue: '正在测试并重排密钥...',
+      })
+    );
+    resetDraftKeyTestStatuses(currentEntries.length);
+    setActiveTestDetailIndex(null);
+
+    try {
+      const results = await Promise.all(validKeyIndexes.map((index) => runSingleKeyTest(index)));
+      const statusesByIndex = currentEntries.map(() => buildIdleKeyTestStatus());
+      validKeyIndexes.forEach((keyIndex, resultIndex) => {
+        statusesByIndex[keyIndex] = results[resultIndex] ?? buildIdleKeyTestStatus();
+      });
+
+      const successCount = results.filter((result) => result.status === 'success').length;
+      const failCount = validKeyIndexes.length - successCount;
+      const changed = reorderKeyEntriesByStatus(statusesByIndex);
+
+      if (failCount === 0) {
+        setTestStatus('success');
+        setTestMessage(t('ai_providers.openai_test_all_success', { count: successCount }));
+      } else if (successCount === 0) {
+        setTestStatus('error');
+        setTestMessage(t('ai_providers.openai_test_all_failed', { count: failCount }));
+      } else {
+        setTestStatus('error');
+        setTestMessage(
+          t('ai_providers.openai_test_all_partial', {
+            success: successCount,
+            failed: failCount,
+          })
+        );
+      }
+
+      showNotification(
+        changed
+          ? t('ai_providers.openai_keys_reorder_done', {
+              defaultValue: '已重排密钥：{{success}} 个可用，{{failed}} 个不可用',
+              success: successCount,
+              failed: failCount,
+            })
+          : t('ai_providers.openai_keys_reorder_unchanged', {
+              defaultValue: '密钥顺序已是可用在上、不可用在下',
+            }),
+        changed ? (failCount > 0 ? 'warning' : 'success') : 'info'
+      );
+    } finally {
+      setIsReorderingKeys(false);
+      setIsTestingKeys(false);
+    }
+  }, [
+    availableModels,
+    form.apiKeyEntries,
+    form.baseUrl,
+    isTestingKeys,
+    reorderKeyEntriesByStatus,
+    resetDraftKeyTestStatuses,
+    runSingleKeyTest,
+    setTestMessage,
+    setTestStatus,
+    showNotification,
+    t,
+    testModel,
   ]);
 
   const openOpenaiModelDiscovery = () => {
@@ -529,15 +724,37 @@ export function AiProvidersOpenAIEditPage() {
           <span className={styles.keyEntriesCount}>
             {t('ai_providers.openai_keys_count')}: {list.length}
           </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setBulkKeysOpen(true)}
-            disabled={saving || disableControls || isTestingKeys}
-            className={styles.addKeyButton}
-          >
-            {t('ai_providers.openai_keys_bulk_toggle')}
-          </Button>
+          <div className={styles.keyEntriesActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void reorderKeysByAvailability()}
+              loading={isReorderingKeys}
+              disabled={
+                saving ||
+                disableControls ||
+                isTestingKeys ||
+                list.length <= 1 ||
+                !hasConfiguredModels ||
+                !hasTestableKeys
+              }
+              title={t('ai_providers.openai_keys_reorder_hint', {
+                defaultValue: '测试所有密钥后，自动把可用密钥排到最上面',
+              })}
+              className={styles.reorderKeysButton}
+            >
+              {t('ai_providers.openai_keys_reorder_action', { defaultValue: '自动重排' })}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setBulkKeysOpen(true)}
+              disabled={saving || disableControls || isTestingKeys}
+              className={styles.addKeyButton}
+            >
+              {t('ai_providers.openai_keys_bulk_toggle')}
+            </Button>
+          </div>
         </div>
         <div className={styles.keyTableShell}>
           {/* 表头 */}
