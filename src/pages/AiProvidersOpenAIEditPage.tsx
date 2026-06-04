@@ -286,6 +286,7 @@ export function AiProvidersOpenAIEditPage() {
     consumeImportedKeyScrollIndex,
     handleBack,
     handleSave,
+    allowNextNavigation,
   } = useOutletContext<OpenAIEditOutletContext>();
 
   const title = hasIndexParam
@@ -307,15 +308,27 @@ export function AiProvidersOpenAIEditPage() {
     setPendingScrollKeyIndex(index);
   }, []);
 
+  // 单击 ESC → 正常退出（如有未保存修改会弹出确认对话框）
+  // 双击 ESC（500ms 内）→ 直接退出，跳过确认对话框
+  const lastEscRef = useRef(0);
   useEffect(() => {
+    const ESC_DOUBLE_TAP_MS = 500;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key !== 'Escape') return;
+      const now = Date.now();
+      if (now - lastEscRef.current <= ESC_DOUBLE_TAP_MS) {
+        // 双击：解除未保存修改拦截，直接退出
+        allowNextNavigation();
+        handleBack();
+      } else {
+        // 单击：正常退出流程
         handleBack();
       }
+      lastEscRef.current = now;
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleBack]);
+  }, [allowNextNavigation, handleBack]);
 
   useEffect(() => {
     if (pendingScrollKeyIndex === null) return;

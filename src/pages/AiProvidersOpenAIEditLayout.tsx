@@ -50,6 +50,7 @@ export type OpenAIEditOutletContext = {
   consumeImportedKeyScrollIndex: () => void;
   handleBack: () => void;
   handleSave: () => Promise<void>;
+  allowNextNavigation: () => void;
   mergeDiscoveredModels: (selectedModels: ModelInfo[]) => void;
 };
 
@@ -642,6 +643,7 @@ export function AiProvidersOpenAIEditLayout() {
         consumeImportedKeyScrollIndex,
         handleBack,
         handleSave,
+        allowNextNavigation,
         mergeDiscoveredModels,
       } satisfies OpenAIEditOutletContext}
     />
