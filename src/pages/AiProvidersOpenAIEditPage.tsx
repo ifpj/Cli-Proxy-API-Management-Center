@@ -171,6 +171,16 @@ const QUOTA_KEYWORDS = [
   'usage',
   'rate limit',
   'too many requests',
+  // Arrearage / overdue
+  'arrearage',
+  'arrears',
+  'overdue',
+  'outstanding',
+  'good standing',
+  'recharge',
+  '欠费',
+  '充值',
+  '余额不足',
 ];
 
 const AUTH_KEYWORDS = [
@@ -186,10 +196,13 @@ const AUTH_KEYWORDS = [
 
 /**
  * 根据 HTTP 状态码和响应内容判断错误类型。
- * 某些供应商（如 Kimi）用 403 表示"使用限额已用完"，而非认证失败。
+ * 某些供应商状态码与常规语义不同，需结合内容判断：
+ * - Kimi 用 403 表示"使用限额已用完"
+ * - 阿里云用 400 表示"账号欠费"
  */
 const isQuotaError = (status: KeyTestStatus): boolean => {
   const code = status.responseStatusCode;
+  // 明确的状态码直接判定
   if (code === 402 || code === 429) return true;
 
   const text = `${status.message || ''} ${status.responseBodyText || ''}`.toLowerCase();
@@ -200,6 +213,7 @@ const isQuotaError = (status: KeyTestStatus): boolean => {
 const isAuthError = (status: KeyTestStatus): boolean => {
   const code = status.responseStatusCode;
   if (code === 401) return true;
+  // 403 如果已被判定为额度问题，则不再视为认证失败
   if (code === 403 && !isQuotaError(status)) return true;
 
   const text = `${status.message || ''} ${status.responseBodyText || ''}`.toLowerCase();
