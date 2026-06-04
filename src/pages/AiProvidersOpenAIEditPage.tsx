@@ -94,14 +94,72 @@ function StatusIdleIcon() {
   );
 }
 
-function StatusIcon({ status }: { status: KeyTestStatus['status'] }) {
+function StatusQuotaIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#f59e0b" />
+      <path
+        d="M8.5 4.5C8.5 4.5 8.5 4 8 4C7 4 6 4.8 6 6C6 7.2 7 8 8 8C9 8 10 8.8 10 10C10 11.2 9 12 8 12C7.5 12 7.5 11.5 7.5 11.5"
+        stroke="white"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M8 3V4M8 12V13" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function StatusAuthErrorIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#8b5cf6" />
+      <path
+        d="M8 4V5.5M5.5 7.5V12C5.5 12.2761 5.72386 12.5 6 12.5H10C10.2761 12.5 10.5 12.2761 10.5 12V7.5C10.5 7.22386 10.2761 7 10 7H6C5.72386 7 5.5 7.22386 5.5 7.5Z"
+        stroke="white"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.5 7V5.5C6.5 4.67157 7.17157 4 8 4C8.82843 4 9.5 4.67157 9.5 5.5V7"
+        stroke="white"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M8 9.5V10.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function StatusUnknownIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="#6b7280" />
+      <path
+        d="M6 6C6 4.89543 6.89543 4 8 4C9.10457 4 10 4.89543 10 6C10 6.87067 9.4174 7.60437 8.6422 7.88731C8.27578 8.02224 8 8.3703 8 8.75858V9.5"
+        stroke="white"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="12" r="0.8" fill="white" />
+    </svg>
+  );
+}
+
+function StatusIcon({ status, statusCode }: { status: KeyTestStatus['status']; statusCode?: number }) {
   switch (status) {
     case 'loading':
       return <StatusLoadingIcon />;
     case 'success':
       return <StatusSuccessIcon />;
-    case 'error':
-      return <StatusErrorIcon />;
+    case 'error': {
+      if (statusCode === 429 || statusCode === 402) return <StatusQuotaIcon />;
+      if (statusCode === 401 || statusCode === 403) return <StatusAuthErrorIcon />;
+      return <StatusUnknownIcon />;
+    }
     default:
       return <StatusIdleIcon />;
   }
@@ -115,11 +173,33 @@ const parseBulkApiKeysText = (text: string) =>
 
 const buildIdleKeyTestStatus = (): KeyTestStatus => ({ status: 'idle', message: '' });
 
+/**
+ * 密钥重排优先级（数字越小越靠前）：
+ * 0: 可用 (2xx)
+ * 1: 额度/余额不足 402/429 — 可能只是暂时用完，最有恢复可能
+ * 2: 服务端错误 5xx — 服务端问题，非密钥问题
+ * 3: 网络/超时错误（无状态码）— 临时性问题
+ * 4: 未测试 idle/loading
+ * 5: 其他客户端错误 4xx（除 401/402/403/429）— 配置错误
+ * 6: 认证失败 401/403 — 密钥确定无效，最需要替换
+ */
 const getKeyReorderRank = (entry: ApiKeyEntry, status: KeyTestStatus) => {
-  if (!entry.apiKey?.trim()) return 2;
-  if (status.status === 'success') return 0;
-  if (status.status === 'error') return 2;
-  return 1;
+  if (!entry.apiKey?.trim()) return 6;
+
+  switch (status.status) {
+    case 'success':
+      return 0;
+    case 'error': {
+      const code = status.responseStatusCode;
+      if (code === 429 || code === 402) return 1; // 额度/余额不足，优先保留
+      if (code && code >= 500) return 2; // 服务端错误，可能是临时的
+      if (!code) return 3; // 网络/超时错误，无状态码
+      if (code === 401 || code === 403) return 6; // 认证失败，最不可用
+      return 5; // 其他 4xx 客户端错误
+    }
+    default:
+      return 4; // idle / loading
+  }
 };
 
 const isEditablePasteTarget = (target: EventTarget | null) => {
@@ -698,8 +778,22 @@ export function AiProvidersOpenAIEditPage() {
     const lines = form.apiKeyEntries.reduce<string[]>((acc, entry, index) => {
       const apiKey = entry.apiKey.trim();
       if (!apiKey) return acc;
-      const isUnavailable = keyTestStatuses[index]?.status === 'error';
-      acc.push(isUnavailable ? `#${apiKey}` : apiKey);
+      const status = keyTestStatuses[index];
+      const isUnavailable = status?.status === 'error';
+      if (!isUnavailable) {
+        acc.push(apiKey);
+        return acc;
+      }
+      const code = status?.responseStatusCode;
+      if (code === 429 || code === 402) {
+        acc.push(`#LIMIT:${apiKey}`);
+      } else if (code === 401 || code === 403) {
+        acc.push(`#AUTH:${apiKey}`);
+      } else if (code) {
+        acc.push(`#ERR${code}:${apiKey}`);
+      } else {
+        acc.push(`#${apiKey}`);
+      }
       return acc;
     }, []);
 
@@ -881,7 +975,7 @@ export function AiProvidersOpenAIEditPage() {
                       setActiveTestDetailIndex(index);
                     }}
                   >
-                    <StatusIcon status={keyStatus} />
+                    <StatusIcon status={keyStatus} statusCode={keyTestStatus?.responseStatusCode} />
                   </button>
                 </div>
 
