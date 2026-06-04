@@ -71,21 +71,6 @@ function StatusSuccessIcon() {
   );
 }
 
-function StatusErrorIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill="var(--danger-color, #c65746)" />
-      <path
-        d="M5 5L11 11M11 5L5 11"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function StatusIdleIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -149,15 +134,15 @@ function StatusUnknownIcon() {
   );
 }
 
-function StatusIcon({ status, statusCode }: { status: KeyTestStatus['status']; statusCode?: number }) {
-  switch (status) {
+function StatusIcon({ status }: { status: KeyTestStatus }) {
+  switch (status.status) {
     case 'loading':
       return <StatusLoadingIcon />;
     case 'success':
       return <StatusSuccessIcon />;
     case 'error': {
-      if (statusCode === 429 || statusCode === 402) return <StatusQuotaIcon />;
-      if (statusCode === 401 || statusCode === 403) return <StatusAuthErrorIcon />;
+      if (isQuotaError(status)) return <StatusQuotaIcon />;
+      if (isAuthError(status)) return <StatusAuthErrorIcon />;
       return <StatusUnknownIcon />;
     }
     default:
@@ -173,15 +158,64 @@ const parseBulkApiKeysText = (text: string) =>
 
 const buildIdleKeyTestStatus = (): KeyTestStatus => ({ status: 'idle', message: '' });
 
+const QUOTA_KEYWORDS = [
+  'quota',
+  'limit',
+  'usage limit',
+  'billing',
+  'insufficient balance',
+  'balance',
+  'exceeded',
+  'reach your limit',
+  'reached your',
+  'usage',
+  'rate limit',
+  'too many requests',
+];
+
+const AUTH_KEYWORDS = [
+  'invalid',
+  'authentication',
+  'unauthorized',
+  'expired',
+  'credentials',
+  'forbidden',
+  'access denied',
+  'not authorized',
+];
+
+/**
+ * 根据 HTTP 状态码和响应内容判断错误类型。
+ * 某些供应商（如 Kimi）用 403 表示"使用限额已用完"，而非认证失败。
+ */
+const isQuotaError = (status: KeyTestStatus): boolean => {
+  const code = status.responseStatusCode;
+  if (code === 402 || code === 429) return true;
+
+  const text = `${status.message || ''} ${status.responseBodyText || ''}`.toLowerCase();
+  if (QUOTA_KEYWORDS.some((k) => text.includes(k))) return true;
+  return false;
+};
+
+const isAuthError = (status: KeyTestStatus): boolean => {
+  const code = status.responseStatusCode;
+  if (code === 401) return true;
+  if (code === 403 && !isQuotaError(status)) return true;
+
+  const text = `${status.message || ''} ${status.responseBodyText || ''}`.toLowerCase();
+  if (AUTH_KEYWORDS.some((k) => text.includes(k))) return true;
+  return false;
+};
+
 /**
  * 密钥重排优先级（数字越小越靠前）：
  * 0: 可用 (2xx)
- * 1: 额度/余额不足 402/429 — 可能只是暂时用完，最有恢复可能
+ * 1: 额度/余额不足 402/429/含关键词的403 — 可能只是暂时用完，最有恢复可能
  * 2: 服务端错误 5xx — 服务端问题，非密钥问题
  * 3: 网络/超时错误（无状态码）— 临时性问题
  * 4: 未测试 idle/loading
- * 5: 其他客户端错误 4xx（除 401/402/403/429）— 配置错误
- * 6: 认证失败 401/403 — 密钥确定无效，最需要替换
+ * 5: 其他客户端错误 4xx — 配置错误
+ * 6: 认证失败 401/不含关键词的403 — 密钥确定无效，最需要替换
  */
 const getKeyReorderRank = (entry: ApiKeyEntry, status: KeyTestStatus) => {
   if (!entry.apiKey?.trim()) return 6;
@@ -191,10 +225,10 @@ const getKeyReorderRank = (entry: ApiKeyEntry, status: KeyTestStatus) => {
       return 0;
     case 'error': {
       const code = status.responseStatusCode;
-      if (code === 429 || code === 402) return 1; // 额度/余额不足，优先保留
+      if (isQuotaError(status)) return 1; // 额度/余额不足，优先保留
+      if (isAuthError(status)) return 6; // 认证失败，最不可用
       if (code && code >= 500) return 2; // 服务端错误，可能是临时的
       if (!code) return 3; // 网络/超时错误，无状态码
-      if (code === 401 || code === 403) return 6; // 认证失败，最不可用
       return 5; // 其他 4xx 客户端错误
     }
     default:
@@ -688,6 +722,14 @@ export function AiProvidersOpenAIEditPage() {
       return;
     }
 
+    // 复用已有 success 状态的密钥，只测试未成功的
+    const alreadySuccessIndexes = validKeyIndexes.filter(
+      (index) => keyTestStatuses[index]?.status === 'success'
+    );
+    const testKeyIndexes = validKeyIndexes.filter(
+      (index) => keyTestStatuses[index]?.status !== 'success'
+    );
+
     setIsTestingKeys(true);
     setIsReorderingKeys(true);
     setTestStatus('loading');
@@ -696,17 +738,25 @@ export function AiProvidersOpenAIEditPage() {
         defaultValue: '正在测试并重排密钥...',
       })
     );
-    resetDraftKeyTestStatuses(currentEntries.length);
     setActiveTestDetailIndex(null);
 
     try {
-      const results = await Promise.all(validKeyIndexes.map((index) => runSingleKeyTest(index)));
-      const statusesByIndex = currentEntries.map(() => buildIdleKeyTestStatus());
-      validKeyIndexes.forEach((keyIndex, resultIndex) => {
+      const results =
+        testKeyIndexes.length > 0
+          ? await Promise.all(testKeyIndexes.map((index) => runSingleKeyTest(index)))
+          : [];
+
+      // 初始化 statusesByIndex：复用已有状态（包括已成功的），避免清空历史结果
+      const statusesByIndex = currentEntries.map((_, index) =>
+        keyTestStatuses[index] ? { ...keyTestStatuses[index] } : buildIdleKeyTestStatus()
+      );
+      testKeyIndexes.forEach((keyIndex, resultIndex) => {
         statusesByIndex[keyIndex] = results[resultIndex] ?? buildIdleKeyTestStatus();
       });
 
-      const successCount = results.filter((result) => result.status === 'success').length;
+      const reusedSuccessCount = alreadySuccessIndexes.length;
+      const newSuccessCount = results.filter((result) => result.status === 'success').length;
+      const successCount = reusedSuccessCount + newSuccessCount;
       const failCount = validKeyIndexes.length - successCount;
       const changed = reorderKeyEntriesByStatus(statusesByIndex);
 
@@ -975,7 +1025,7 @@ export function AiProvidersOpenAIEditPage() {
                       setActiveTestDetailIndex(index);
                     }}
                   >
-                    <StatusIcon status={keyStatus} statusCode={keyTestStatus?.responseStatusCode} />
+                    <StatusIcon status={keyTestStatus ?? buildIdleKeyTestStatus()} />
                   </button>
                 </div>
 
