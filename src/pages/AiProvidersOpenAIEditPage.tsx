@@ -259,7 +259,7 @@ const isEditablePasteTarget = (target: EventTarget | null) => {
 export function AiProvidersOpenAIEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { showNotification } = useNotificationStore();
+  const { showNotification, showConfirmation } = useNotificationStore();
   const {
     hasIndexParam,
     invalidIndexParam,
@@ -896,6 +896,35 @@ export function AiProvidersOpenAIEditPage() {
     );
   }, [form.apiKeyEntries, keyTestStatuses, showNotification, t]);
 
+  const clearAllApiKeys = useCallback(() => {
+    showConfirmation({
+      title: t('ai_providers.openai_keys_clear_all_confirm_title', {
+        defaultValue: '清空所有密钥',
+      }),
+      message: t('ai_providers.openai_keys_clear_all_confirm', {
+        defaultValue: '确定要清空当前所有 API 密钥吗？此操作无法撤销。',
+      }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        setForm((prev) => ({
+          ...prev,
+          apiKeyEntries: [buildApiKeyEntry()],
+        }));
+        resetDraftKeyTestStatuses(1);
+        setTestStatus('idle');
+        setTestMessage('');
+        setActiveTestDetailIndex(null);
+        showNotification(
+          t('ai_providers.openai_keys_clear_all_done', {
+            defaultValue: '所有密钥已清空',
+          }),
+          'success'
+        );
+      },
+    });
+  }, [resetDraftKeyTestStatuses, setForm, setTestMessage, setTestStatus, showConfirmation, showNotification, t]);
+
   const buildImportedApiKeyEntry = useCallback(
     (apiKey: string) => {
       const proxyUrl = pasteProxyUrl.trim();
@@ -984,6 +1013,18 @@ export function AiProvidersOpenAIEditPage() {
               className={styles.exportKeysButton}
             >
               {t('ai_providers.openai_keys_export_action', { defaultValue: '导出密钥' })}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={clearAllApiKeys}
+              disabled={saving || disableControls || isTestingKeys || list.length === 0 || (list.length === 1 && !list[0].apiKey?.trim())}
+              title={t('ai_providers.openai_keys_clear_all_hint', {
+                defaultValue: '清空所有密钥',
+              })}
+              className={styles.clearKeysButton}
+            >
+              {t('ai_providers.openai_keys_clear_all_action', { defaultValue: '清空密钥' })}
             </Button>
             <Button
               variant="secondary"
